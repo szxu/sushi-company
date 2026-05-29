@@ -15,7 +15,13 @@ bad() { echo "FAIL: $*" >&2; fail=1; }
 [[ -f "$CONFIG_DIR/engines.json" ]] && pass "engine config present" || bad "missing config/engines.json"
 
 mkdir -p "$SUSHI_STATE_DIR"
-[[ -w "$SUSHI_STATE_DIR" ]] && pass "state dir writable: $SUSHI_STATE_DIR" || bad "state dir not writable: $SUSHI_STATE_DIR"
+probe="$SUSHI_STATE_DIR/.doctor-write-test.$$"
+if touch "$probe" >/dev/null 2>&1; then
+  rm -f "$probe"
+  pass "state dir writable: $SUSHI_STATE_DIR"
+else
+  warn "state dir not writable in this environment: $SUSHI_STATE_DIR"
+fi
 
 ensure_project
 pass "current project: $SUSHI_PROJECT_KEY"

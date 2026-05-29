@@ -41,6 +41,9 @@ project history, and QA workflow.
   so the framework repo stays shareable.
 * **Specialist roles**: CTO, frontend, backend, systems, unit-test, BDD-test,
   compiler, code-reviewer, QA, and UI designer profiles.
+* **Workflow skills baked in**: brainstorming, writing plans, TDD, systematic
+  debugging, code review, and verification skills are included as repo-local
+  `SKILL.md` files inspired by `obra/superpowers`.
 
 ---
 
@@ -80,6 +83,7 @@ project history, and QA workflow.
   projects/<KEY>/work/        # Private per-task working directories
   projects/<KEY>/logs/        # Private project run logs
   docs/                       # Detailed architectural references
+  skills/                     # Reusable workflow skills for any coding engine
 ```
 
 ---
@@ -160,6 +164,22 @@ export SUSHI_STATE_DIR=/path/to/private/state
 
 This keeps the framework repo safe to publish without personal projects or large
 build artifacts. See `docs/PUBLISHING.md` for the vanilla export workflow.
+
+### Skills
+
+Sushi includes repo-local skills so different coding tools can follow the same
+high-signal workflow:
+
+- `skills/core/brainstorming/SKILL.md`
+- `skills/core/writing-plans/SKILL.md`
+- `skills/core/test-driven-development/SKILL.md`
+- `skills/core/systematic-debugging/SKILL.md`
+- `skills/core/requesting-code-review/SKILL.md`
+- `skills/core/verification-before-completion/SKILL.md`
+
+These are the main takeaways adapted from `obra/superpowers`: stronger
+pre-coding thinking, stricter test/review behavior, and explicit verification
+before a task is called done.
 
 ### 1. Create a Project
 

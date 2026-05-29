@@ -19,6 +19,17 @@ mkdir -p "$HOME"
 "$ROOT/bin/project" create "Sushi Company" SUSH >/tmp/sushi-project.out
 grep -q "created project: SUSH" /tmp/sushi-project.out
 
+for skill in \
+  "$ROOT/skills/core/brainstorming/SKILL.md" \
+  "$ROOT/skills/core/writing-plans/SKILL.md" \
+  "$ROOT/skills/core/test-driven-development/SKILL.md" \
+  "$ROOT/skills/core/systematic-debugging/SKILL.md" \
+  "$ROOT/skills/core/requesting-code-review/SKILL.md" \
+  "$ROOT/skills/core/verification-before-completion/SKILL.md"
+do
+  [[ -f "$skill" ]]
+done
+
 first="$("$ROOT/bin/ticket" "First task" "Do one thing")"
 second="$("$ROOT/bin/ticket" "Second task" "Do another thing")"
 [[ "$first" == "$TMP_STATE/projects/SUSH/tickets/SUSH-0001.md" ]]
