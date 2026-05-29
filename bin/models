@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# models — view and edit the CEO's model policy
+#
+# Usage:
+#   models                       # show the current policy table
+#   models list-available        # probe which models your account can use right now
+#   models set <role> <model>    # assign a model to a role
+#   models reset                 # restore default policy
+#
+# Example:
+#   models set unit-test gpt-5-mini
+#   models set frontend claude-sonnet-4.5
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+CFG="$COMPANY_DIR/config/models.json"
+
+cmd="${1:-show}"
+
+case "$cmd" in
+  show|"")
+    echo "Model policy → $CFG"
+    echo
+    python3 - <<PY
+import json
+cfg = json.load(open("$CFG"))
+roles = cfg.get("roles", {})
+w = max(len(r) for r in roles)
+print(f"  {'ROLE'.ljust(w)}  MODEL")
+print(f"  {'-'*w}  {'-'*20}")
+for r in ["ceo","cto","code-reviewer","qa","backend","frontend","systems","bdd-test","compiler","unit-test"]:
+    if r in roles:
+        print(f"  {r.ljust(w)}  {roles[r]}")
+print()
+print("Available on this account:")
+for line in cfg.get("_available_on_this_account", []):
+    print(f"  - {line}")
+PY
+    ;;
+
+  list-available)
+    echo "Probing which models this account can use (one ping each, ~3s/model)..."
+    for m in gpt-5.4 gpt-5.2 gpt-5.4-mini gpt-5-mini claude-sonnet-4.5 claude-haiku-4.5; do
+      if "$SUSHI_CLI" --model "$m" -p "ping" --allow-all-tools -s >/dev/null 2>&1; then
+        echo "  ✓ $m"
+      else
+        echo "  ✗ $m"
+      fi
+    done
+    ;;
+
+  set)
+    role="${2:-}"; model="${3:-}"
+    if [[ -z "$role" || -z "$model" ]]; then
+      echo "Usage: models set <role> <model>" >&2; exit 2
+    fi
+    python3 - "$role" "$model" <<PY
+import json, sys
+role, model = sys.argv[1], sys.argv[2]
+path = "$CFG"
+cfg = json.load(open(path))
+cfg.setdefault("roles", {})[role] = model
+json.dump(cfg, open(path, "w"), indent=2)
+print(f"  {role} → {model}")
+PY
+    ;;
+
+  reset)
+    cp "$CFG" "$CFG.bak.$(date +%s)"
+    cat > "$CFG" <<'JSON'
+{
+  "_comment": "Model assignments per role. CEO reads this file on every ticket.",
+  "_tiers": {
+    "critical":  "gpt-5.4",
+    "important": "gpt-5.2",
+    "standard":  "gpt-5.4-mini",
+    "cheap":     "gpt-5-mini"
+  },
+  "_available_on_this_account": [
+    "gpt-5.4         — flagship",
+    "gpt-5.2         — previous flagship",
+    "claude-sonnet-4.5 — flagship alt",
+    "gpt-5.4-mini    — cheap, fast",
+    "gpt-5-mini      — cheapest, fast",
+    "claude-haiku-4.5 — cheap alt"
+  ],
+  "roles": {
+    "ceo":           "gpt-5.4",
+    "cto":           "gpt-5.4",
+    "code-reviewer": "gpt-5.4",
+    "qa":            "gpt-5.4",
+    "backend":       "gpt-5.2",
+    "frontend":      "gpt-5.2",
+    "systems":       "gpt-5.2",
+    "bdd-test":      "gpt-5.2",
+    "compiler":      "gpt-5.4-mini",
+    "unit-test":     "gpt-5-mini"
+  }
+}
+JSON
+    echo "Defaults restored. Backup saved next to $CFG"
+    ;;
+
+  *)
+    echo "Usage: models [show|list-available|set <role> <model>|reset]" >&2
+    exit 2
+    ;;
+esac

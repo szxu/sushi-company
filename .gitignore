@@ -1,0 +1,36 @@
+.DS_Store
+
+# Private Sushi runtime state. These live in SUSHI_STATE_DIR by default.
+/projects/
+/tickets/
+/logs/
+/STATUS.md
+
+# Runtime logs and process markers
+*.run.log
+*.pid
+*.log
+
+# Build and release artifacts
+artifacts/
+win-unpacked/
+dist/
+build/
+*.asar
+*.exe
+*.dll
+*.dylib
+*.so
+*.tgz
+*.zip
+
+# Python/test outputs
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node outputs
+node_modules/
+coverage/

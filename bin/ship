@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# ship — hand a ticket to the CEO agent and let the company execute it.
+# Usage:
+#   ship <ticket-id-or-path>         # e.g. ship T-0001   or   ship ~/sushi-company/tickets/T-0001.md
+#   ship --new "title" "description" # create a ticket and immediately ship it
+#
+# The CEO agent plans, delegates to specialists, and drives the ticket to DONE.
+# Progress is logged to $SUSHI_STATE_DIR/logs/<ticket-id>.md in real time.
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+mkdir -p "$TICKETS_DIR" "$LOGS_DIR" "$PROJECTS_DIR"
+
+if [[ "${1:-}" == "--new" ]]; then
+  shift
+  ticket_file=$("$BIN_DIR/ticket" "${1:-}" "${2:-}")
+else
+  arg="${1:-}"
+  if [[ -z "$arg" ]]; then
+    echo "Usage: ship <ticket-id-or-path> | ship --new \"title\" \"desc\"" >&2
+    exit 2
+  fi
+  if [[ -f "$arg" ]]; then
+    ticket_file="$arg"
+  elif [[ -f "$TICKETS_DIR/$arg.md" ]]; then
+    ticket_file="$TICKETS_DIR/$arg.md"
+  else
+    echo "Ticket not found: $arg" >&2
+    exit 1
+  fi
+fi
+
+ticket_id=$(basename "$ticket_file" .md)
+project_dir="$PROJECTS_DIR/$ticket_id"
+log_file="$LOGS_DIR/$ticket_id.md"
+mkdir -p "$project_dir"
+
+# --- Preflight: refuse if another ship for this ticket is already running ---
+# Can be bypassed with FORCE_SHIP=1 for rare emergencies.
+if [[ "${FORCE_SHIP:-0}" != "1" ]] && "$BIN_DIR/status-board" running "$ticket_id" >/tmp/ship-running.$$ 2>/dev/null; then
+  echo "=== ABORT: another ship/sushi is already running for $ticket_id ===" >&2
+  cat /tmp/ship-running.$$ >&2
+  echo >&2
+  echo "If you really want a parallel run, re-invoke with FORCE_SHIP=1." >&2
+  rm -f /tmp/ship-running.$$
+  "$BIN_DIR/status-board" append ABORT "$ticket_id" "$$" "duplicate ship blocked by preflight" || true
+  exit 3
+fi
+rm -f /tmp/ship-running.$$
+
+# --- Log start to activity board, register EXIT trap ---
+"$BIN_DIR/status-board" append START "$ticket_id" "$$" "ship wrapper pid=$$" || true
+_ship_exit() {
+  rc=$?
+  if [[ $rc -eq 0 ]]; then
+    "$BIN_DIR/status-board" append EXIT-OK "$ticket_id" "$$" "rc=0" || true
+  else
+    "$BIN_DIR/status-board" append EXIT-FAIL "$ticket_id" "$$" "rc=$rc" || true
+  fi
+}
+trap _ship_exit EXIT
+
+echo "=== Shipping $ticket_id ==="
+echo "Ticket:  $ticket_file"
+echo "Project: $project_dir"
+echo "Log:     $log_file"
+echo "State:   $SUSHI_STATE_DIR"
+echo "Engine:  $SUSHI_CLI (home: $SUSHI_HOME)"
+echo
+
+prompt="Execute ticket at $ticket_file.
+
+Ticket id: $ticket_id
+Project directory: $project_dir
+Log file: $log_file
+Model-for helper: $BIN_DIR/model-for (use it to resolve --model for every specialist call)
+Model config: $COMPANY_DIR/config/models.json (read-only reference for the policy)
+Runtime state directory: $SUSHI_STATE_DIR
+
+Follow your standard workflow: plan, delegate to specialist agents via '$SUSHI_CLI --agent=<role> --model \"\$($BIN_DIR/model-for <role> $ticket_file)\" -p ...', review, iterate, and ship. Do not stop until QA returns APPROVED or you are genuinely blocked."
+
+CEO_MODEL=$("$BIN_DIR/model-for" ceo "$ticket_file")
+echo "CEO model: $CEO_MODEL"
+echo
+
+run_log="$LOGS_DIR/$ticket_id.run.log"
+# Append a run-separator with start timestamp so the cost aggregator can scope trailers per run.
+printf '\n===== SHIP START %s  ticket=%s  pid=%s  model=%s =====\n' \
+  "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$ticket_id" "$$" "$CEO_MODEL" >> "$run_log"
+
+"$SUSHI_CLI" \
+  --agent=ceo \
+  --model "$CEO_MODEL" \
+  --allow-all \
+  --add-dir "$COMPANY_DIR" \
+  --add-dir "$project_dir" \
+  -p "$prompt" 2>&1 | tee -a "$run_log"
+
+printf '===== SHIP END   %s  ticket=%s  pid=%s =====\n' \
+  "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$ticket_id" "$$" >> "$run_log"

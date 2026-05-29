@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# export-vanilla — create a sanitized Sushi Company framework export.
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+dest="${1:-$HOME/workspace/sushi-company-vanilla}"
+
+if [[ "$dest" == "$COMPANY_DIR" || "$dest" == "$COMPANY_DIR/"* ]]; then
+  echo "Refusing to export inside the source framework directory: $dest" >&2
+  exit 2
+fi
+
+rm -rf "$dest"
+mkdir -p "$dest"
+
+copy_item() {
+  local rel="$1"
+  if [[ -e "$COMPANY_DIR/$rel" ]]; then
+    if [[ -d "$COMPANY_DIR/$rel" && ! -L "$COMPANY_DIR/$rel" ]]; then
+      mkdir -p "$dest/$rel"
+      rsync -a --exclude '__pycache__/' --exclude '*.pyc' "$COMPANY_DIR/$rel"/ "$dest/$rel"/
+    else
+      mkdir -p "$dest/$(dirname "$rel")"
+      rsync -a "$COMPANY_DIR/$rel" "$dest/$rel"
+    fi
+  fi
+}
+
+for rel in README.md Start\ GUI.command .gitignore; do
+  copy_item "$rel"
+done
+
+for rel in bin config docs gui skills templates; do
+  copy_item "$rel"
+done
+
+cat > "$dest/AGENTS.md" <<'EOF'
+# Sushi Company
+
+This is the shareable framework repo. Keep private runtime state outside the
+repo by using `SUSHI_STATE_DIR`, which defaults to `~/.sushi/company-state`.
+
+Do not commit real tickets, project workdirs, logs, build artifacts, PID files,
+or local CLI state. Use `bin/share-doctor <export-dir>` before publishing.
+EOF
+ln -sf AGENTS.md "$dest/CLAUDE.md"
+ln -sf AGENTS.md "$dest/GEMINI.md"
+ln -sf AGENTS.md "$dest/.antigravity.md"
+
+mkdir -p "$dest/templates/tickets" "$dest/examples"
+if [[ ! -f "$dest/templates/tickets/example.md" ]]; then
+  cat > "$dest/templates/tickets/example.md" <<'EOF'
+# T-0001: Example ticket
+
+Status: OPEN
+
+## Description
+Build a tiny hello-world CLI so the company workflow can be tested safely.
+
+## Acceptance criteria
+- Running the CLI prints `hello from sushi`.
+- Unit tests pass.
+- QA approves the ticket.
+EOF
+fi
+
+find "$dest" -name '.DS_Store' -delete
+"$BIN_DIR/share-doctor" "$dest"
+
+echo "Vanilla export ready: $dest"

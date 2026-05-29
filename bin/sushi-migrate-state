@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# sushi-migrate-state — copy repo-local private state into SUSHI_STATE_DIR.
+#
+# This is intentionally non-destructive by default. It copies current tickets,
+# projects, logs, and STATUS.md out of the framework repo so future runs can use
+# private state outside Git.
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+mode="${1:---copy}"
+if [[ "$mode" != "--copy" && "$mode" != "--move" ]]; then
+  echo "Usage: sushi-migrate-state [--copy|--move]" >&2
+  exit 2
+fi
+
+mkdir -p "$TICKETS_DIR" "$PROJECTS_DIR" "$LOGS_DIR"
+
+copy_dir() {
+  local src="$1"
+  local dst="$2"
+  if [[ -d "$src" ]]; then
+    mkdir -p "$dst"
+    rsync -a "$src"/ "$dst"/
+    echo "copied $src -> $dst"
+    if [[ "$mode" == "--move" ]]; then
+      rm -rf "$src"
+      echo "removed $src"
+    fi
+  else
+    echo "skip missing $src"
+  fi
+}
+
+copy_file() {
+  local src="$1"
+  local dst="$2"
+  if [[ -f "$src" ]]; then
+    mkdir -p "$(dirname "$dst")"
+    cp -p "$src" "$dst"
+    echo "copied $src -> $dst"
+    if [[ "$mode" == "--move" ]]; then
+      rm -f "$src"
+      echo "removed $src"
+    fi
+  else
+    echo "skip missing $src"
+  fi
+}
+
+copy_dir "$COMPANY_DIR/tickets" "$TICKETS_DIR"
+copy_dir "$COMPANY_DIR/projects" "$PROJECTS_DIR"
+copy_dir "$COMPANY_DIR/logs" "$LOGS_DIR"
+copy_file "$COMPANY_DIR/STATUS.md" "$STATUS_BOARD"
+
+echo
+echo "State directory ready: $SUSHI_STATE_DIR"
+echo "Framework directory:   $COMPANY_DIR"
+if [[ "$mode" == "--copy" ]]; then
+  echo "Source files were left in place. Use --move only after backup/review."
+fi

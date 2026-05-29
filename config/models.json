@@ -1,0 +1,34 @@
+{
+  "_comment": "Model assignments per role. CEO reads this file on every ticket and passes --model when delegating. Edit freely — changes apply on next `ship`.",
+  "_available_on_this_account": [
+    "claude-opus-4.7   — flagship premium (7.5 req/call)",
+    "gpt-5.4         — flagship, default",
+    "gpt-5.2         — previous flagship",
+    "claude-sonnet-4.5 — flagship alt",
+    "gpt-5.4-mini    — cheap, fast",
+    "gpt-5-mini      — cheapest, fast",
+    "claude-haiku-4.5 — cheap alt"
+  ],
+  "_tiers": {
+    "critical":  "gpt-5.4",
+    "important": "gpt-5.2",
+    "standard":  "gpt-5.4-mini",
+    "cheap":     "gpt-5-mini"
+  },
+  "roles": {
+    "ceo":           "claude-opus-4.7",
+    "cto":           "gpt-5.4",
+    "code-reviewer": "gpt-5.4",
+    "qa":            "gpt-5.4",
+
+    "backend":       "gpt-5.2",
+    "frontend":      "gpt-5.2",
+    "systems":       "gpt-5.2",
+    "bdd-test":      "gpt-5.2",
+
+    "compiler":      "gpt-5.4-mini",
+    "unit-test":     "gpt-5-mini",
+
+    "ui-designer":   "gpt-5.4"
+  }
+}

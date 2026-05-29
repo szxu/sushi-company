@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# sushi — call the CEO by name.
+#
+# Usage:
+#   sushi                              # Sushi reports status — open tickets, recent logs, system health
+#   sushi <ticket-id>                  # Sushi ships that ticket (same as `ship T-NNNN`)
+#   sushi T-0002                       # ^
+#   sushi --new "title" "description"  # file + ship in one go
+#   sushi "<free-form instruction>"    # hand Sushi an ad-hoc instruction (he'll decide what to do)
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+# --- Click-n-Go Auto-Symlink Management ---
+CWD="$(pwd)"
+for agent_dir in .gemini .agy .claude .copilot; do
+  target_dir="$CWD/$agent_dir"
+  if [[ ! -d "$target_dir" ]]; then
+    mkdir -p "$target_dir"
+  fi
+  if [[ ! -L "$target_dir/agents" && ! -e "$target_dir/agents" ]]; then
+    ln -s "$SUSHI_HOME/agents" "$target_dir/agents"
+    echo "  [Auto-Symlink] Created $agent_dir/agents -> $SUSHI_HOME/agents"
+  fi
+done
+
+# --- Zshrc Global Environment Configuration ---
+if ! grep -q "COPILOT_HOME=" "$HOME/.zshrc" 2>/dev/null; then
+  echo "export COPILOT_HOME=\"$SUSHI_HOME\"" >> "$HOME/.zshrc"
+  echo "  [Auto-Config] Added export COPILOT_HOME to ~/.zshrc for future terminal sessions."
+fi
+
+# No args → status report
+if [[ $# -eq 0 ]]; then
+  CEO_MODEL=$("$BIN_DIR/model-for" ceo)
+  "$SUSHI_CLI" --agent=ceo --model "$CEO_MODEL" --allow-all \
+    --add-dir "$COMPANY_DIR" -s \
+    -p "You are Sushi. Douglas just called your name with no other instruction — give him a crisp status report:
+
+1. List any tickets in $TICKETS_DIR/ that are not DONE (show id, title, status).
+2. List the 3 most recent log files in $LOGS_DIR/ with their last status line.
+3. One-line system health (agents present in $SUSHI_HOME/agents/, model config loaded).
+4. End with: 'Ready for your next ticket. — Sushi'
+
+Be concise. Use plain text, not JSON."
+  exit $?
+fi
+
+arg="$1"
+
+# Explicit ticket path or id → delegate to ship
+if [[ -f "$arg" || -f "$TICKETS_DIR/$arg.md" ]]; then
+  exec "$BIN_DIR/ship" "$arg"
+fi
+
+# --new passthrough
+if [[ "$arg" == "--new" ]]; then
+  shift
+  exec "$BIN_DIR/ship" --new "${1:-}" "${2:-}"
+fi
+
+# Free-form instruction → hand it to Sushi directly
+CEO_MODEL=$("$BIN_DIR/model-for" ceo)
+"$SUSHI_CLI" --agent=ceo --model "$CEO_MODEL" --allow-all \
+  --add-dir "$COMPANY_DIR" -s \
+  -p "You are Sushi. Douglas sent this ad-hoc instruction:
+
+\"\"\"
+$*
+\"\"\"
+
+Decide what to do. If it's a new piece of work, create a ticket file in $TICKETS_DIR/ with a fresh id, then execute it using your standard workflow (delegate to specialists, iterate, ship). If it's a question about the company or an existing ticket, answer it directly. Sign off with '— Sushi'."

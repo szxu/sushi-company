@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# cost-report — summarize Sushi spend from $SUSHI_STATE_DIR/logs/*.run.log
+# Usage:
+#   cost-report                    # all tickets, lifetime totals
+#   cost-report T-0002             # one ticket (matches T-0002*.run.log)
+#   cost-report T-0002 --latest    # only the most recent ship run for that ticket
+#
+# Parses CLI trailers of the form:
+#   Changes   +194 -7
+#   Requests  1 Premium (4h 4m 48s)
+#   Tokens    ↑ 9.6m • ↓ 41.4k • 9.2m (cached) • 15.1k (reasoning)
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+LOGS_DIR="${LOGS_DIR:-$SUSHI_STATE_DIR/logs}"
+filter="${1:-}"
+mode="${2:-all}"
+
+shopt -s nullglob
+if [[ -n "$filter" ]]; then
+  files=( "$LOGS_DIR/${filter}"*.run.log )
+else
+  files=( "$LOGS_DIR"/*.run.log )
+fi
+
+if [[ ${#files[@]} -eq 0 ]]; then
+  echo "no run logs found${filter:+ for $filter}"
+  exit 0
+fi
+
+python3 - "$mode" "${files[@]}" <<'PY'
+import re, sys, os
+
+mode = sys.argv[1]
+files = sys.argv[2:]
+
+def to_num(s):
+    s = s.strip().lower().replace(',', '')
+    m = re.match(r'^([\d.]+)\s*([kmb]?)$', s)
+    if not m: return 0.0
+    v = float(m.group(1)); u = m.group(2)
+    return v * {'':1,'k':1e3,'m':1e6,'b':1e9}[u]
+
+def fmt(n):
+    n = int(n)
+    for u, d in (('b',1e9),('m',1e6),('k',1e3)):
+        if n >= d: return f"{n/d:.1f}{u}"
+    return str(n)
+
+re_req  = re.compile(r'^Requests\s+([\d.]+)\s+Premium(?:\s*\(([^)]+)\))?', re.M)
+re_tok  = re.compile(r'^Tokens\s+[^\d]*([\d.]+\s*[kmb]?)\s*[•·]\s*[^\d]*([\d.]+\s*[kmb]?)', re.M)
+re_chg  = re.compile(r'^Changes\s+\+(\d+)\s+-(\d+)', re.M)
+re_sep  = re.compile(r'^===== SHIP START ')
+
+grand = {'runs':0,'premium':0.0,'in':0,'out':0,'plus':0,'minus':0}
+per_ticket = {}
+
+for path in sorted(files):
+    ticket = os.path.basename(path).replace('.run.log','')
+    try:
+        with open(path, 'r', errors='replace') as f:
+            text = f.read()
+    except Exception:
+        continue
+
+    # Split per SHIP START; if none present, treat whole file as one run.
+    chunks = re.split(r'(?m)^===== SHIP START .*$', text)
+    # Drop leading empty chunk produced when file begins with a separator.
+    if chunks and not chunks[0].strip():
+        chunks = chunks[1:]
+    if not chunks:
+        chunks = [text]
+
+    if mode == '--latest':
+        chunks = chunks[-1:]
+
+    t = per_ticket.setdefault(ticket, {'runs':0,'premium':0.0,'in':0,'out':0,'plus':0,'minus':0})
+    for ch in chunks:
+        had = False
+        for m in re_req.finditer(ch):
+            t['premium'] += float(m.group(1)); had = True
+        for m in re_tok.finditer(ch):
+            t['in']  += to_num(m.group(1))
+            t['out'] += to_num(m.group(2)); had = True
+        for m in re_chg.finditer(ch):
+            t['plus']  += int(m.group(1))
+            t['minus'] += int(m.group(2)); had = True
+        if had:
+            t['runs'] += 1
+
+# Aggregate + print
+print(f"{'TICKET':<28} {'RUNS':>4} {'PREMIUM':>8} {'TOKENS_IN':>10} {'TOKENS_OUT':>10} {'+LINES':>7} {'-LINES':>7}")
+for tk in sorted(per_ticket):
+    t = per_ticket[tk]
+    if t['runs'] == 0: continue
+    for k in grand: grand[k] += t[k]
+    print(f"{tk:<28} {t['runs']:>4} {t['premium']:>8.1f} {fmt(t['in']):>10} {fmt(t['out']):>10} {t['plus']:>7} {t['minus']:>7}")
+
+print('-'*80)
+print(f"{'TOTAL':<28} {grand['runs']:>4} {grand['premium']:>8.1f} {fmt(grand['in']):>10} {fmt(grand['out']):>10} {grand['plus']:>7} {grand['minus']:>7}")
+print()
+print(f"Premium request cost guide: opus-4.7=7.5/req, sonnet-4.5=1/req, gpt-5=0.5/req (varies by model tier).")
+PY

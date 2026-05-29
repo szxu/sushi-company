@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# status-board — append/read the shared activity board for sushi-company.
+#
+# Usage:
+#   status-board append <event> <ticket-id> <pid> [note...]
+#       events: START, EXIT-OK, EXIT-FAIL, ABORT
+#   status-board running <ticket-id>       # exits 0 if a ship for this ticket
+#                                            is currently alive, 1 otherwise.
+#                                            prints "<pid>\t<elapsed>\t<cmd>"
+#   status-board show [N]                   # print last N board lines (default 20)
+#   status-board active                     # print all currently-running ships
+#                                            (reconciles board vs ps)
+#
+# File format (tab-separated, one line per event):
+#   ISO8601-UTC \t EVENT \t TICKET \t PID \t NOTE
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+BOARD="$STATUS_BOARD"
+
+ensure_board() {
+  if [[ ! -f "$BOARD" ]]; then
+    {
+      echo "# sushi-company activity board"
+      echo ""
+      echo "Tab-separated event log. Format: \`ISO8601-UTC  EVENT  TICKET  PID  NOTE\`"
+      echo "Events: START, EXIT-OK, EXIT-FAIL, ABORT"
+      echo ""
+      echo '```'
+    } >"$BOARD"
+  fi
+}
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  append)
+    mkdir -p "$(dirname "$BOARD")"
+    ensure_board
+    event="${1:-UNKNOWN}"; ticket="${2:-UNKNOWN}"; pid="${3:-?}"; shift 3 || true
+    note="${*:-}"
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$ts" "$event" "$ticket" "$pid" "$note" >>"$BOARD"
+    ;;
+
+  running)
+    ticket="${1:-}"
+    if [[ -z "$ticket" ]]; then
+      echo "usage: status-board running <ticket-id>" >&2; exit 2
+    fi
+    # Look for any live `ship <ticket>` or `sushi <ticket>` process
+    # (also catches their copilot --agent=ceo child referencing the ticket path)
+    matches=$(pgrep -af "sushi-(copilot-)?company/bin/(ship|sushi) $ticket( |$)|tickets/$ticket\.md|$SUSHI_STATE_DIR/.*/$ticket(\\.md|/)" \
+              | grep -v status-board || true)
+    if [[ -z "$matches" ]]; then
+      exit 1
+    fi
+    # Print first matching ship/sushi wrapper pid with elapsed time
+    while IFS= read -r line; do
+      pid=$(awk '{print $1}' <<<"$line")
+      [[ -z "$pid" ]] && continue
+      elapsed=$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ' || true)
+      [[ -z "$elapsed" ]] && continue
+      printf '%s\t%s\t%s\n' "$pid" "$elapsed" "$line"
+    done <<<"$matches"
+    ;;
+
+  show)
+    n="${1:-20}"
+    if [[ ! -f "$BOARD" ]]; then echo "(no board yet)"; exit 0; fi
+    # Print header + last N data lines (skip the markdown fence)
+    echo "=== sushi-company STATUS.md (last $n events) ==="
+    grep -E $'^[0-9]{4}-[0-9]{2}-[0-9]{2}T' "$BOARD" | tail -n "$n"
+    ;;
+
+  active)
+    echo "=== currently-running ship/sushi wrappers ==="
+    pgrep -af "sushi-(copilot-)?company/bin/(ship|sushi) " | grep -v status-board || echo "(none)"
+    ;;
+
+  *)
+    echo "usage: status-board {append|running|show|active} ..." >&2
+    exit 2
+    ;;
+esac

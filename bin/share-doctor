@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# share-doctor — fail if a Sushi Company export contains private state or large artifacts.
+
+set -euo pipefail
+
+target="${1:-}"
+if [[ -z "$target" || ! -d "$target" ]]; then
+  echo "Usage: share-doctor <export-dir>" >&2
+  exit 2
+fi
+
+fail=0
+
+check_path_absent() {
+  local rel="$1"
+  if [[ -e "$target/$rel" ]]; then
+    echo "FAIL: private/runtime path present: $rel" >&2
+    fail=1
+  fi
+}
+
+check_path_absent "projects"
+check_path_absent "tickets"
+check_path_absent "logs"
+check_path_absent "STATUS.md"
+check_path_absent ".git"
+check_path_absent ".DS_Store"
+
+while IFS= read -r path; do
+  echo "FAIL: unsafe artifact pattern: ${path#$target/}" >&2
+  fail=1
+done < <(find "$target" -type f \( \
+  -name '*.pid' -o -name '*.run.log' -o -name '*.asar' -o -name '*.exe' -o \
+  -name '*.so' -o -name '*.dylib' -o -name '*.dll' -o -name '*.pyc' \) -print)
+
+while IFS= read -r path; do
+  echo "FAIL: file over 50MB: ${path#$target/}" >&2
+  fail=1
+done < <(find "$target" -type f -size +50M -print)
+
+while IFS= read -r path; do
+  echo "FAIL: Douglas-specific absolute path found in ${path#$target/}" >&2
+  fail=1
+done < <(grep -RIl --exclude='share-doctor' '/Users/douglas/workspace' "$target" 2>/dev/null || true)
+
+while IFS= read -r path; do
+  if [[ "$(readlink "$path")" == /Users/douglas/* ]]; then
+    echo "FAIL: symlink points into Douglas home: ${path#$target/}" >&2
+    fail=1
+  fi
+done < <(find "$target" -type l -print)
+
+if [[ "$fail" -ne 0 ]]; then
+  echo "share-doctor: FAILED" >&2
+  exit 1
+fi
+
+echo "share-doctor: PASS ($target)"

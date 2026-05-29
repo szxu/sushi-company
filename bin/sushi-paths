@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# sushi-paths — shared path resolution for Sushi Company scripts.
+#
+# Framework code lives in COMPANY_DIR. Private runtime state lives in
+# SUSHI_STATE_DIR so a framework repo can be shared without tickets/projects/logs.
+
+if [[ -z "${SUSHI_PATHS_LOADED:-}" ]]; then
+  SUSHI_PATHS_LOADED=1
+
+  SUSHI_HOME="${SUSHI_HOME:-$HOME/.sushi}"
+  export COPILOT_HOME="${COPILOT_HOME:-$SUSHI_HOME}"
+  SUSHI_CLI="${SUSHI_CLI:-copilot}"
+
+  if [[ -z "${COMPANY_DIR:-}" ]]; then
+    script_path="${BASH_SOURCE[0]}"
+    while [[ -L "$script_path" ]]; do
+      script_dir="$(cd -P "$(dirname "$script_path")" >/dev/null 2>&1 && pwd)"
+      script_path="$(readlink "$script_path")"
+      [[ "$script_path" != /* ]] && script_path="$script_dir/$script_path"
+    done
+    script_dir="$(cd -P "$(dirname "$script_path")" >/dev/null 2>&1 && pwd)"
+    COMPANY_DIR="$(cd "$script_dir/.." >/dev/null 2>&1 && pwd)"
+  fi
+
+  SUSHI_STATE_DIR="${SUSHI_STATE_DIR:-$SUSHI_HOME/company-state}"
+  BIN_DIR="$COMPANY_DIR/bin"
+  CONFIG_DIR="$COMPANY_DIR/config"
+  TICKETS_DIR="$SUSHI_STATE_DIR/tickets"
+  PROJECTS_DIR="$SUSHI_STATE_DIR/projects"
+  LOGS_DIR="$SUSHI_STATE_DIR/logs"
+  STATUS_BOARD="$SUSHI_STATE_DIR/STATUS.md"
+
+  export SUSHI_HOME SUSHI_CLI COMPANY_DIR SUSHI_STATE_DIR
+  export BIN_DIR CONFIG_DIR TICKETS_DIR PROJECTS_DIR LOGS_DIR STATUS_BOARD
+fi

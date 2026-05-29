@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# sushi-init — Universal initialization script for Sushi Company.
+#
+# Usage:
+#   ./bin/sushi-init [workspace-path]
+#
+# Decouples all coding CLIs, links their configuration directories to ~/.sushi,
+# backs up existing setups, and establishes the universal multi-agent architecture.
+
+set -euo pipefail
+
+# ANSI color codes for premium terminal layout
+BOLD="\033[1m"
+GREEN="\033[38;2;147;250;165m"
+PURPLE="\033[38;2;191;148;255m"
+CYAN="\033[38;2;135;206;250m"
+ORANGE="\033[38;2;255;165;0m"
+RESET="\033[0m"
+
+echo -e "${BOLD}${PURPLE}"
+echo "   ██████  ██    ██  ██████ ██   ██ ██    ██ "
+echo "  ██       ██    ██ ██      ██   ██  ██  ██  "
+echo "   █████   ██    ██  █████  ███████   ████   "
+echo "       ██  ██    ██      ██ ██   ██    ██    "
+echo "  ██████    ██████  ██████  ██   ██    ██    "
+echo -e "${RESET}"
+echo -e "${BOLD}${CYAN}🍣 Universal AI Software Company Setup 🍣${RESET}\n"
+
+# --- 1. Workspace Resolution ---
+DEFAULT_WS="$HOME/workspace/sushi-company"
+if [[ ! -d "$DEFAULT_WS" ]]; then
+  DEFAULT_WS="$(pwd)"
+fi
+
+ws_path="${1:-}"
+if [[ -z "$ws_path" ]]; then
+  if [[ -t 0 ]]; then
+    # Interactive mode
+    echo -e -n "  Enter workspace path [${CYAN}$DEFAULT_WS${RESET}]: "
+    read -r input_ws
+    ws_path="${input_ws:-$DEFAULT_WS}"
+  else
+    # Non-interactive / script mode
+    ws_path="$DEFAULT_WS"
+  fi
+fi
+
+# Ensure absolute path
+ws_path="$(cd "$ws_path" 2>/dev/null && pwd || echo "$ws_path")"
+echo -e "  Using workspace: ${BOLD}${GREEN}$ws_path${RESET}\n"
+
+if [[ ! -d "$ws_path" ]]; then
+  echo -e "${BOLD}${ORANGE}Error: Directory $ws_path does not exist!${RESET}" >&2
+  exit 1
+fi
+
+# --- 2. Initialize ~/.sushi/ Directory ---
+SUSHI_HOME="$HOME/.sushi"
+echo -e "  [1/4] Establishing unified home directory: ${BOLD}${PURPLE}$SUSHI_HOME${RESET}"
+mkdir -p "$SUSHI_HOME/agents"
+mkdir -p "$SUSHI_HOME/session-state"
+
+# Copy universal agent templates if present in workspace
+if [[ -d "$ws_path/templates/agents" ]]; then
+  cp -R "$ws_path/templates/agents"/*.agent.md "$SUSHI_HOME/agents/" 2>/dev/null || true
+elif [[ -d "$ws_path/.gemini/agents" ]]; then
+  # Fallback to current symlink directory or existing agent list
+  cp -R "$ws_path/.gemini/agents"/*.agent.md "$SUSHI_HOME/agents/" 2>/dev/null || true
+fi
+
+# Copy configurations if not present
+for cfg_file in settings.json config.json copilot-instructions.md; do
+  if [[ -f "$ws_path/templates/$cfg_file" && ! -f "$SUSHI_HOME/$cfg_file" ]]; then
+    cp "$ws_path/templates/$cfg_file" "$SUSHI_HOME/"
+  elif [[ -f "$HOME/.copilot/$cfg_file" && ! -f "$SUSHI_HOME/$cfg_file" ]]; then
+    cp "$HOME/.copilot/$cfg_file" "$SUSHI_HOME/"
+  fi
+done
+
+# Ensure ceo.agent.md exists
+if [[ ! -f "$SUSHI_HOME/agents/ceo.agent.md" ]]; then
+  if [[ -f "$ws_path/templates/ceo.agent.md" ]]; then
+    cp "$ws_path/templates/ceo.agent.md" "$SUSHI_HOME/agents/"
+  elif [[ -f "$SUSHI_HOME/copilot-instructions.md" ]]; then
+    # Create ceo agent from global instructions
+    cat > "$SUSHI_HOME/agents/ceo.agent.md" <<EOF
+---
+name: ceo
+description: CEO / Chief Orchestrator — orchestrates execution of tickets end-to-end, delegating tasks to specialists.
+tools:
+  - read
+  - write
+  - search
+  - shell
+---
+
+$(cat "$SUSHI_HOME/copilot-instructions.md")
+EOF
+  fi
+fi
+
+# --- 3. Unified Cross-CLI Symlinking ---
+echo -e "  [2/4] Symlinking popular coding CLI directories..."
+timestamp="$(date +%s)"
+
+for cli_dir in .copilot .gemini .agy .claude; do
+  target_path="$HOME/$cli_dir"
+  if [[ -e "$target_path" || -L "$target_path" ]]; then
+    if [[ -L "$target_path" ]]; then
+      # Already a symlink, safe to remove and recreate to be sure
+      rm -f "$target_path"
+    else
+      # Actual folder, back it up safely
+      backup_path="${target_path}.backup-$timestamp"
+      echo -e "        ${BOLD}${ORANGE}Backup:${RESET} Migrating existing $cli_dir -> $backup_path"
+      mv "$target_path" "$backup_path"
+    fi
+  fi
+  # Symlink entire CLI folder directly to unified ~/.sushi
+  ln -s "$SUSHI_HOME" "$target_path"
+  echo -e "        ${BOLD}${GREEN}Linked:${RESET} $cli_dir/ -> ~/.sushi/"
+done
+
+# Symlink ~/.config/antigravity to unified ~/.sushi
+config_parent="$HOME/.config"
+mkdir -p "$config_parent"
+antigravity_config="$config_parent/antigravity"
+if [[ -e "$antigravity_config" || -L "$antigravity_config" ]]; then
+  if [[ -L "$antigravity_config" ]]; then
+    rm -f "$antigravity_config"
+  else
+    mv "$antigravity_config" "${antigravity_config}.backup-$timestamp"
+  fi
+fi
+ln -s "$SUSHI_HOME" "$antigravity_config"
+echo -e "        ${BOLD}${GREEN}Linked:${RESET} ~/.config/antigravity -> ~/.sushi/"
+
+# Establish global instruction symlinks for all engines
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/GEMINI.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/.antigravity.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/instructions.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/gemini-instructions.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/agy-instructions.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/claude-instructions.md"
+echo -e "        ${BOLD}${GREEN}Linked:${RESET} global instruction files to copilot-instructions.md"
+
+# --- 4. Workspace Local Symlinks ---
+echo -e "  [3/4] Establishing local workspace symlinks..."
+mkdir -p "$ws_path/.gemini" "$ws_path/.agy" "$ws_path/.claude"
+
+for agent_folder in .gemini .agy .claude; do
+  ws_agent_link="$ws_path/$agent_folder/agents"
+  if [[ -e "$ws_agent_link" || -L "$ws_agent_link" ]]; then
+    rm -rf "$ws_agent_link"
+  fi
+  ln -s "$SUSHI_HOME/agents" "$ws_agent_link"
+  echo -e "        ${BOLD}${GREEN}Linked:${RESET} $ws_path/$agent_folder/agents -> ~/.sushi/agents"
+done
+
+# Establish project-level and workspace-level instruction files
+for target_dir in "$ws_path" "$(dirname "$ws_path")"; do
+  if [[ -d "$target_dir" ]]; then
+    ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/GEMINI.md"
+    ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/.antigravity.md"
+    ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/AGENTS.md"
+    ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/CLAUDE.md"
+    echo -e "        ${BOLD}${GREEN}Linked local instructions:${RESET} in $target_dir"
+  fi
+done
+
+# --- 5. Global Environment Integration (~/.zshrc) ---
+echo -e "  [4/4] Writing shell environment configuration..."
+ZSHRC="$HOME/.zshrc"
+
+if [[ -f "$ZSHRC" ]]; then
+  # Inject isolated home variable
+  if ! grep -q "COPILOT_HOME=" "$ZSHRC"; then
+    echo -e '\n# Unified AI Software Company (Sushi)' >> "$ZSHRC"
+    echo "export COPILOT_HOME=\"$SUSHI_HOME\"" >> "$ZSHRC"
+    echo -e "        ${BOLD}${GREEN}Injected:${RESET} export COPILOT_HOME to ~/.zshrc"
+  fi
+  # Inject workspace PATH helper
+  if ! grep -q "$ws_path/bin" "$ZSHRC"; then
+    echo "export PATH=\"$ws_path/bin:\$PATH\"" >> "$ZSHRC"
+    echo -e "        ${BOLD}${GREEN}Injected:${RESET} export PATH to ~/.zshrc"
+  fi
+fi
+
+echo -e "\n${BOLD}${GREEN}✨ Sushi Company Successfully Unified! ✨${RESET}"
+echo -e "  All terminal CLIs (Copilot, Gemini, Agy, Claude) now share a single"
+echo -e "  brain, session memory, settings, and orchestrator at: ${BOLD}${PURPLE}~/.sushi/${RESET}\n"
+echo -e "  Open a new terminal window or run: ${BOLD}${CYAN}source ~/.zshrc${RESET} to reload."

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ticket — create a new ticket file and print its path
+# Usage:
+#   ticket "Short title" "Full description with acceptance criteria"
+# or just:
+#   ticket        # opens $EDITOR on a blank template
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+mkdir -p "$TICKETS_DIR"
+
+# Find next ticket id
+last=$(ls "$TICKETS_DIR" 2>/dev/null | grep -Eo '^T-[0-9]+' | sort -V | tail -1 || true)
+if [[ -z "${last:-}" ]]; then
+  next="T-0001"
+else
+  num=${last#T-}
+  next=$(printf "T-%04d" $((10#$num + 1)))
+fi
+
+title="${1:-}"
+body="${2:-}"
+file="$TICKETS_DIR/$next.md"
+
+if [[ -z "$title" ]]; then
+  title="(untitled)"
+fi
+
+cat > "$file" <<EOF
+# $next: $title
+
+Status: OPEN
+Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+## Description
+${body:-<describe the work>}
+
+## Acceptance criteria
+- <criterion 1>
+- <criterion 2>
+
+## Notes
+EOF
+
+if [[ -z "$body" && -t 0 ]]; then
+  "${EDITOR:-vi}" "$file" || true
+fi
+
+echo "$file"

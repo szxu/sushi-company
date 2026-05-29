@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# model-for — print the model id the CEO should pass to `copilot --model <X>`
+# for a given specialist role, respecting ticket-level overrides.
+#
+# Usage:
+#   model-for <role> [ticket-file]
+#
+# Resolution order (first hit wins):
+#   1. Ticket file line:  Model override <role>: <model-id>
+#   2. Ticket file line:  Model override all:    <model-id>     (applies to any role)
+#   3. config/models.json roles.<role>
+#   4. config/models.json _tiers.standard
+#   5. hard default:     gpt-5.4-mini
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+CFG="$COMPANY_DIR/config/models.json"
+
+role="${1:-}"
+ticket="${2:-}"
+if [[ -z "$role" ]]; then
+  echo "Usage: model-for <role> [ticket-file]" >&2
+  exit 2
+fi
+
+# 1 + 2: ticket-level overrides
+if [[ -n "$ticket" && -f "$ticket" ]]; then
+  m=$(grep -iE "^Model override[[:space:]]+$role[[:space:]]*:" "$ticket" | head -1 | sed -E "s/^[^:]+:[[:space:]]*//" | tr -d '[:space:]' || true)
+  if [[ -n "$m" ]]; then echo "$m"; exit 0; fi
+  m=$(grep -iE "^Model override[[:space:]]+all[[:space:]]*:"       "$ticket" | head -1 | sed -E "s/^[^:]+:[[:space:]]*//" | tr -d '[:space:]' || true)
+  if [[ -n "$m" ]]; then echo "$m"; exit 0; fi
+fi
+
+# 3: config file role mapping (no jq dependency — minimal python)
+if [[ -f "$CFG" ]]; then
+  m=$(python3 -c "
+import json
+try:
+    cfg = json.load(open('$CFG'))
+    print(cfg.get('roles', {}).get('$role') or cfg.get('_tiers', {}).get('standard') or '')
+except Exception:
+    print('')
+" 2>/dev/null || true)
+  if [[ -n "$m" ]]; then echo "$m"; exit 0; fi
+fi
+
+# 5: hard default
+echo "gpt-5.4-mini"
