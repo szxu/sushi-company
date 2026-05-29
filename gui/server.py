@@ -24,6 +24,29 @@ TICKETS_DIR = os.path.join(STATE_DIR, "tickets")
 PROJECTS_DIR = os.path.join(STATE_DIR, "projects")
 LOGS_DIR = os.path.join(STATE_DIR, "logs")
 STATUS_BOARD = os.path.join(STATE_DIR, "STATUS.md")
+CURRENT_PROJECT_FILE = os.path.join(STATE_DIR, "current-project")
+
+def current_project_key():
+    env_key = os.environ.get("SUSHI_PROJECT_KEY", "").strip().upper()
+    if re.match(r"^[A-Z]{4}$", env_key):
+        return env_key
+    if os.path.exists(CURRENT_PROJECT_FILE):
+        with open(CURRENT_PROJECT_FILE, "r") as f:
+            file_key = f.read().strip().upper()
+        if re.match(r"^[A-Z]{4}$", file_key):
+            return file_key
+    return "SUSH"
+
+def project_dirs(project_key=None):
+    key = (project_key or current_project_key()).upper()
+    project_dir = os.path.join(PROJECTS_DIR, key)
+    return {
+        "key": key,
+        "project": project_dir,
+        "tickets": os.path.join(project_dir, "tickets"),
+        "work": os.path.join(project_dir, "work"),
+        "logs": os.path.join(project_dir, "logs"),
+    }
 
 class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -78,6 +101,8 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
             response = self.get_sushi_status()
         elif path == "/api/tickets":
             response = self.get_tickets()
+        elif path == "/api/projects":
+            response = self.get_projects()
         elif path == "/api/models":
             response = self.get_models()
         elif path == "/api/engines":
@@ -108,6 +133,12 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
             response = self.set_model_policy(data)
         elif path == "/api/engines/toggle":
             response = self.toggle_engine(data)
+        elif path == "/api/engines/use":
+            response = self.use_engine(data)
+        elif path == "/api/projects/use":
+            response = self.use_project(data)
+        elif path == "/api/projects/create":
+            response = self.create_project(data)
         elif path == "/api/ship":
             response = self.trigger_ship(data)
         else:
@@ -159,11 +190,13 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
             "agents": agents,
             "sushi_home": SUSHI_HOME,
             "workspace": WORKSPACE_DIR,
-            "state_dir": STATE_DIR
+            "state_dir": STATE_DIR,
+            "current_project": current_project_key()
         }
 
     def get_tickets(self):
-        tickets_dir = TICKETS_DIR
+        query_key = current_project_key()
+        tickets_dir = project_dirs(query_key)["tickets"]
         tickets = []
         if os.path.exists(tickets_dir):
             for filename in sorted(os.listdir(tickets_dir)):
@@ -173,7 +206,7 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
                         content = f.read()
                     
                     # Extract title, status, and created date
-                    title_match = re.search(r'^#\s+([A-Z]-[A-Z0-9-]+)\s*(?::|--?|—)\s*(.*)$', content, re.M)
+                    title_match = re.search(r'^#\s+([A-Z]{4}-\d{4})\s*(?::|--?|—)\s*(.*)$', content, re.M)
                     status_match = re.search(r'^(?:\*\*)?Status(?:\*\*)?:\s*(.*)$', content, re.M)
                     created_match = re.search(r'^(?:\*\*)?Created(?:\*\*)?:\s*(.*)$', content, re.M)
 
@@ -183,19 +216,42 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
                             "title": title_match.group(2).strip(),
                             "status": status_match.group(1).strip() if status_match else "UNKNOWN",
                             "created": created_match.group(1).strip() if created_match else "UNKNOWN",
+                            "project": query_key,
                             "filename": filename
                         })
         return {"tickets": tickets}
 
+    def get_projects(self):
+        projects = []
+        active = current_project_key()
+        os.makedirs(PROJECTS_DIR, exist_ok=True)
+        for name in sorted(os.listdir(PROJECTS_DIR)):
+            if not re.match(r"^[A-Z]{4}$", name):
+                continue
+            project_dir = os.path.join(PROJECTS_DIR, name)
+            if not os.path.isdir(project_dir):
+                continue
+            display_name = f"{name} Project"
+            meta = os.path.join(project_dir, "project.json")
+            if os.path.exists(meta):
+                try:
+                    with open(meta, "r") as f:
+                        display_name = json.load(f).get("name", display_name)
+                except Exception:
+                    pass
+            projects.append({"key": name, "name": display_name, "active": name == active})
+        return {"projects": projects, "current": active}
+
     def create_ticket(self, data):
         title = data.get("title", "Untitled Ticket")
         description = data.get("description", "")
+        project_key = data.get("project", current_project_key()).upper()
         
         # Invoke ./bin/ticket
         bin_ticket = os.path.join(WORKSPACE_DIR, "bin", "ticket")
         env = os.environ.copy()
         env["SUSHI_STATE_DIR"] = STATE_DIR
-        proc = subprocess.run([bin_ticket, title, description], capture_output=True, text=True, env=env)
+        proc = subprocess.run([bin_ticket, "--project", project_key, title, description], capture_output=True, text=True, env=env)
         if proc.returncode == 0:
             ticket_file = proc.stdout.strip()
             ticket_id = os.path.basename(ticket_file).replace(".md", "")
@@ -224,55 +280,108 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
             return {"status": "error", "message": proc.stderr}
 
     def get_engines(self):
-        engines = [".copilot", ".gemini", ".agy", ".claude"]
+        cfg_path = os.path.join(WORKSPACE_DIR, "config", "engines.json")
+        with open(cfg_path, "r") as f:
+            cfg = json.load(f)
+        active_file = os.path.join(SUSHI_HOME, "active-engine")
+        active = cfg.get("default", "copilot")
+        if os.path.exists(active_file):
+            with open(active_file, "r") as f:
+                active = f.read().strip() or active
         states = {}
-        for eng in engines:
-            path = os.path.expanduser(f"~/{eng}")
+        for name, engine in cfg.get("engines", {}).items():
+            home_dirs = engine.get("home_dirs", [])
+            primary = home_dirs[0] if home_dirs else f".{name}"
+            path = os.path.expanduser(f"~/{primary}")
             is_linked = os.path.islink(path)
             resolves_to = os.readlink(path) if is_linked else ""
-            states[eng] = {
+            command = engine.get("command", name)
+            states[name] = {
+                "label": engine.get("label", name),
+                "command": command,
+                "pitch": engine.get("pitch", ""),
                 "exists": os.path.exists(path) or is_linked,
                 "is_linked": is_linked and (SUSHI_HOME in resolves_to),
-                "resolves_to": resolves_to
+                "resolves_to": resolves_to,
+                "active": name == active
             }
-        return {"engines": states}
+        return {"engines": states, "active": active}
 
     def toggle_engine(self, data):
-        engine = data.get("engine") # e.g. ".copilot"
-        if not engine.startswith("."):
-            engine = f".{engine}"
+        engine = data.get("engine")
+        if not engine:
+            return {"status": "error", "message": "Missing engine"}
+        if engine.startswith("."):
+            engine = engine[1:]
+
+        cfg_path = os.path.join(WORKSPACE_DIR, "config", "engines.json")
+        with open(cfg_path, "r") as f:
+            cfg = json.load(f)
+        profile = cfg.get("engines", {}).get(engine)
+        if not profile:
+            return {"status": "error", "message": f"Unknown engine: {engine}"}
         
-        path = os.path.expanduser(f"~/{engine}")
+        home_dirs = profile.get("home_dirs", [f".{engine}"]) + profile.get("extra_config_dirs", [])
         timestamp = subprocess.run(["date", "+%s"], capture_output=True, text=True).stdout.strip()
 
-        if os.path.islink(path):
+        primary_path = os.path.expanduser(f"~/{home_dirs[0]}")
+        if os.path.islink(primary_path):
             # Unlink
-            os.unlink(path)
-            # Sync ~/.config/antigravity if .agy is unlinked
-            if engine == ".agy":
-                config_path = os.path.expanduser("~/.config/antigravity")
-                if os.path.islink(config_path):
-                    os.unlink(config_path)
-            # Restore backup if available
-            backup_pattern = os.path.expanduser(f"~/{engine}.backup-*")
-            # Minimal fallback: just report unlinked
+            for rel in home_dirs:
+                path = os.path.expanduser(f"~/{rel}")
+                if os.path.islink(path):
+                    os.unlink(path)
             return {"status": "unlinked", "message": f"Successfully unlinked {engine} from ~/.sushi"}
         else:
             # Backup and Link
-            if os.path.exists(path):
-                backup_path = f"{path}.backup-{timestamp}"
-                os.rename(path, backup_path)
-            os.symlink(SUSHI_HOME, path)
-            # Sync ~/.config/antigravity if .agy is linked
-            if engine == ".agy":
-                config_path = os.path.expanduser("~/.config/antigravity")
-                if os.path.islink(config_path):
-                    os.unlink(config_path)
-                elif os.path.exists(config_path):
-                    os.rename(config_path, f"{config_path}.backup-{timestamp}")
-                os.makedirs(os.path.dirname(config_path), exist_ok=True)
-                os.symlink(SUSHI_HOME, config_path)
+            for rel in home_dirs:
+                path = os.path.expanduser(f"~/{rel}")
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                if os.path.islink(path):
+                    os.unlink(path)
+                elif os.path.exists(path):
+                    backup_path = f"{path}.backup-{timestamp}"
+                    os.rename(path, backup_path)
+                os.symlink(SUSHI_HOME, path)
             return {"status": "linked", "message": f"Successfully symlinked {engine} -> ~/.sushi"}
+
+    def use_engine(self, data):
+        engine = data.get("engine")
+        if not engine:
+            return {"status": "error", "message": "Missing engine"}
+        bin_engines = os.path.join(WORKSPACE_DIR, "bin", "engines")
+        proc = subprocess.run([bin_engines, "use", engine], capture_output=True, text=True)
+        if proc.returncode == 0:
+            return {"status": "success", "message": proc.stdout.strip()}
+        return {"status": "error", "message": proc.stderr or proc.stdout}
+
+    def use_project(self, data):
+        key = data.get("project", "").upper()
+        if not re.match(r"^[A-Z]{4}$", key):
+            return {"status": "error", "message": "Project key must be four uppercase letters"}
+        bin_project = os.path.join(WORKSPACE_DIR, "bin", "project")
+        env = os.environ.copy()
+        env["SUSHI_STATE_DIR"] = STATE_DIR
+        proc = subprocess.run([bin_project, "use", key], capture_output=True, text=True, env=env)
+        if proc.returncode == 0:
+            return {"status": "success", "message": proc.stdout.strip()}
+        return {"status": "error", "message": proc.stderr or proc.stdout}
+
+    def create_project(self, data):
+        name = data.get("name", "")
+        key = data.get("key", "")
+        if not name:
+            return {"status": "error", "message": "Missing project name"}
+        bin_project = os.path.join(WORKSPACE_DIR, "bin", "project")
+        env = os.environ.copy()
+        env["SUSHI_STATE_DIR"] = STATE_DIR
+        args = [bin_project, "create", name]
+        if key:
+            args.append(key.upper())
+        proc = subprocess.run(args, capture_output=True, text=True, env=env)
+        if proc.returncode == 0:
+            return {"status": "success", "message": proc.stdout.strip()}
+        return {"status": "error", "message": proc.stderr or proc.stdout}
 
     def trigger_ship(self, data):
         ticket_id = data.get("ticket_id")
@@ -281,7 +390,8 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
         
         bin_ship = os.path.join(WORKSPACE_DIR, "bin", "ship")
         # Run in background via subprocess.Popen to prevent blocking the API
-        log_file = os.path.join(LOGS_DIR, f"{ticket_id}.run.log")
+        project_key = ticket_id[:4] if re.match(r"^[A-Z]{4}-\d{4}$", ticket_id) else current_project_key()
+        log_file = os.path.join(project_dirs(project_key)["logs"], f"{ticket_id}.run.log")
         
         # Ensure log folder exists
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
@@ -292,6 +402,7 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
         # Popen runs completely asynchronously
         env = os.environ.copy()
         env["SUSHI_STATE_DIR"] = STATE_DIR
+        env["SUSHI_PROJECT_KEY"] = project_key
         subprocess.Popen([bin_ship, ticket_id], stdout=open(log_file, "a"), stderr=subprocess.STDOUT, preexec_fn=os.setpgrp, env=env)
         return {"status": "success", "message": f"Launched shipping run for {ticket_id} in background."}
 
@@ -299,7 +410,8 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
         if not ticket:
             return {"output": "No ticket selected."}
         
-        log_path = os.path.join(LOGS_DIR, f"{ticket}.run.log")
+        project_key = ticket[:4] if re.match(r"^[A-Z]{4}-\d{4}$", ticket) else current_project_key()
+        log_path = os.path.join(project_dirs(project_key)["logs"], f"{ticket}.run.log")
         if os.path.exists(log_path):
             with open(log_path, 'r', errors='replace') as f:
                 lines = f.readlines()
@@ -309,9 +421,12 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     # Ensure workspace directory matches current
     os.makedirs(os.path.join(WORKSPACE_DIR, "gui"), exist_ok=True)
-    os.makedirs(TICKETS_DIR, exist_ok=True)
     os.makedirs(PROJECTS_DIR, exist_ok=True)
     os.makedirs(LOGS_DIR, exist_ok=True)
+    dirs = project_dirs()
+    os.makedirs(dirs["tickets"], exist_ok=True)
+    os.makedirs(dirs["work"], exist_ok=True)
+    os.makedirs(dirs["logs"], exist_ok=True)
     
     # zero-dependency TCPServer
     socketserver.TCPServer.allow_reuse_address = True

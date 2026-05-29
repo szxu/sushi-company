@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# doctor — local health checks for a Sushi Company install.
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+fail=0
+pass() { echo "PASS: $*"; }
+warn() { echo "WARN: $*"; }
+bad() { echo "FAIL: $*" >&2; fail=1; }
+
+[[ -d "$COMPANY_DIR/bin" ]] && pass "framework dir: $COMPANY_DIR" || bad "missing framework bin dir"
+[[ -f "$CONFIG_DIR/models.json" ]] && pass "model config present" || bad "missing config/models.json"
+[[ -f "$CONFIG_DIR/engines.json" ]] && pass "engine config present" || bad "missing config/engines.json"
+
+mkdir -p "$SUSHI_STATE_DIR"
+[[ -w "$SUSHI_STATE_DIR" ]] && pass "state dir writable: $SUSHI_STATE_DIR" || bad "state dir not writable: $SUSHI_STATE_DIR"
+
+ensure_project
+pass "current project: $SUSHI_PROJECT_KEY"
+
+if [[ -d "$SUSHI_HOME/agents" ]]; then
+  count=$(find "$SUSHI_HOME/agents" -maxdepth 1 -name '*.agent.md' | wc -l | tr -d ' ')
+  [[ "$count" -gt 0 ]] && pass "agent profiles present: $count" || warn "no agent profiles found in $SUSHI_HOME/agents"
+else
+  warn "agent directory missing: $SUSHI_HOME/agents"
+fi
+
+active_engine="$("$BIN_DIR/engines" current 2>/dev/null || echo copilot)"
+engine_cmd="$(python3 - "$CONFIG_DIR/engines.json" "$active_engine" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+name = sys.argv[2]
+print(cfg.get("engines", {}).get(name, {}).get("command", name))
+PY
+)"
+if command -v "$engine_cmd" >/dev/null 2>&1; then
+  pass "active engine available: $active_engine ($engine_cmd)"
+else
+  warn "active engine command not on PATH: $active_engine ($engine_cmd)"
+fi
+
+if find "$SUSHI_STATE_DIR" -name '*.pid' -type f | grep -q .; then
+  warn "PID files exist; stale cleanup may be useful"
+else
+  pass "no PID files in state dir"
+fi
+
+if find "$COMPANY_DIR" -path "$COMPANY_DIR/.git" -prune -o \( -path "$COMPANY_DIR/projects" -o -path "$COMPANY_DIR/tickets" -o -path "$COMPANY_DIR/logs" \) -print | grep -q .; then
+  bad "runtime dirs exist inside framework repo"
+else
+  pass "no runtime dirs inside framework repo"
+fi
+
+if find "$COMPANY_DIR" -type f -size +50M -not -path "$COMPANY_DIR/.git/*" | grep -q .; then
+  bad "large files over 50MB exist inside framework repo"
+else
+  pass "no large files over 50MB inside framework repo"
+fi
+
+if [[ "$fail" -ne 0 ]]; then
+  echo "doctor: FAILED" >&2
+  exit 1
+fi
+
+echo "doctor: PASS"

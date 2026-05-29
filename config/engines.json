@@ -1,0 +1,56 @@
+{
+  "_comment": "CLI engine profiles. Switch with `engines use <name>`. The active engine controls SUSHI_CLI for new runs.",
+  "default": "copilot",
+  "engines": {
+    "copilot": {
+      "label": "GitHub Copilot CLI",
+      "command": "copilot",
+      "home_dirs": [".copilot"],
+      "workspace_dirs": [".copilot"],
+      "pitch": "Good default if you already have Copilot access."
+    },
+    "claude": {
+      "label": "Claude CLI",
+      "command": "claude",
+      "home_dirs": [".claude"],
+      "workspace_dirs": [".claude"],
+      "pitch": "Great reasoning, but often expensive; switch away when the budget gets noisy."
+    },
+    "gemini": {
+      "label": "Gemini CLI",
+      "command": "gemini",
+      "home_dirs": [".gemini"],
+      "workspace_dirs": [".gemini"],
+      "pitch": "Useful alternate engine when you want a different model family."
+    },
+    "agy": {
+      "label": "Antigravity / Agy",
+      "command": "agy",
+      "home_dirs": [".agy"],
+      "workspace_dirs": [".agy"],
+      "extra_config_dirs": [".config/antigravity"],
+      "pitch": "IDE-style agent workflow with shared Sushi company state."
+    },
+    "opencode": {
+      "label": "OpenCode",
+      "command": "opencode",
+      "home_dirs": [".opencode"],
+      "workspace_dirs": [".opencode"],
+      "pitch": "Open-source-oriented CLI option for teams avoiding premium lock-in."
+    },
+    "cursor": {
+      "label": "Cursor",
+      "command": "cursor",
+      "home_dirs": [".cursor"],
+      "workspace_dirs": [".cursor"],
+      "pitch": "Editor-first workflow while keeping Sushi's agents and tickets portable."
+    },
+    "windsurf": {
+      "label": "Windsurf",
+      "command": "windsurf",
+      "home_dirs": [".windsurf"],
+      "workspace_dirs": [".windsurf"],
+      "pitch": "Another editor/agent option for comparing quality and cost."
+    }
+  }
+}

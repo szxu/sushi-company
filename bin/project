@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# project — manage Sushi project keys and current project context.
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+usage() {
+  echo "Usage: project [current|list|use <KEY>|create <name> [KEY]]" >&2
+}
+
+valid_key() {
+  [[ "$1" =~ ^[A-Z]{4}$ ]]
+}
+
+derive_key() {
+  python3 - "$1" <<'PY'
+import re, sys
+name = sys.argv[1].strip()
+words = re.findall(r"[A-Za-z0-9]+", name)
+if not words:
+    print("PROJ")
+elif len(words) >= 4:
+    print("".join(w[0] for w in words[:4]).upper())
+else:
+    raw = "".join(words).upper()
+    print((raw + "XXXX")[:4])
+PY
+}
+
+cmd="${1:-current}"
+case "$cmd" in
+  current)
+    ensure_project
+    echo "$SUSHI_PROJECT_KEY"
+    ;;
+  list)
+    mkdir -p "$PROJECTS_DIR"
+    found=0
+    for dir in "$PROJECTS_DIR"/*; do
+      [[ -d "$dir" ]] || continue
+      key="$(basename "$dir")"
+      [[ "$key" =~ ^[A-Z]{4}$ ]] || continue
+      name="$key"
+      [[ -f "$dir/project.json" ]] && name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("name", sys.argv[2]))' "$dir/project.json" "$key")"
+      marker=" "
+      [[ "$key" == "$SUSHI_PROJECT_KEY" ]] && marker="*"
+      printf "%s %s  %s\n" "$marker" "$key" "$name"
+      found=1
+    done
+    [[ "$found" -eq 1 ]] || echo "(no projects yet)"
+    ;;
+  use)
+    key="${2:-}"
+    valid_key "$key" || { echo "Project key must be four uppercase letters, e.g. SUSH" >&2; exit 2; }
+    mkdir -p "$PROJECTS_DIR/$key/tickets" "$PROJECTS_DIR/$key/logs" "$PROJECTS_DIR/$key/work"
+    echo "$key" > "$CURRENT_PROJECT_FILE"
+    echo "current project: $key"
+    ;;
+  create)
+    name="${2:-}"
+    [[ -n "$name" ]] || { usage; exit 2; }
+    key="${3:-$(derive_key "$name")}"
+    valid_key "$key" || { echo "Project key must be four uppercase letters, e.g. SUSH" >&2; exit 2; }
+    mkdir -p "$PROJECTS_DIR/$key/tickets" "$PROJECTS_DIR/$key/logs" "$PROJECTS_DIR/$key/work"
+    python3 - "$PROJECTS_DIR/$key/project.json" "$key" "$name" <<'PY'
+import json, sys
+path, key, name = sys.argv[1:]
+json.dump({"key": key, "name": name}, open(path, "w"), indent=2)
+PY
+    echo "$key" > "$CURRENT_PROJECT_FILE"
+    echo "created project: $key  $name"
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac

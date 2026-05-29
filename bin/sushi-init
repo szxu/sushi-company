@@ -103,7 +103,7 @@ fi
 echo -e "  [2/4] Symlinking popular coding CLI directories..."
 timestamp="$(date +%s)"
 
-for cli_dir in .copilot .gemini .agy .claude; do
+for cli_dir in .copilot .gemini .agy .claude .opencode .cursor .windsurf; do
   target_path="$HOME/$cli_dir"
   if [[ -e "$target_path" || -L "$target_path" ]]; then
     if [[ -L "$target_path" ]]; then
@@ -142,13 +142,16 @@ ln -sf "copilot-instructions.md" "$SUSHI_HOME/instructions.md"
 ln -sf "copilot-instructions.md" "$SUSHI_HOME/gemini-instructions.md"
 ln -sf "copilot-instructions.md" "$SUSHI_HOME/agy-instructions.md"
 ln -sf "copilot-instructions.md" "$SUSHI_HOME/claude-instructions.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/opencode-instructions.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/cursor-instructions.md"
+ln -sf "copilot-instructions.md" "$SUSHI_HOME/windsurf-instructions.md"
 echo -e "        ${BOLD}${GREEN}Linked:${RESET} global instruction files to copilot-instructions.md"
 
 # --- 4. Workspace Local Symlinks ---
 echo -e "  [3/4] Establishing local workspace symlinks..."
-mkdir -p "$ws_path/.gemini" "$ws_path/.agy" "$ws_path/.claude"
+mkdir -p "$ws_path/.gemini" "$ws_path/.agy" "$ws_path/.claude" "$ws_path/.opencode" "$ws_path/.cursor" "$ws_path/.windsurf"
 
-for agent_folder in .gemini .agy .claude; do
+for agent_folder in .gemini .agy .claude .opencode .cursor .windsurf; do
   ws_agent_link="$ws_path/$agent_folder/agents"
   if [[ -e "$ws_agent_link" || -L "$ws_agent_link" ]]; then
     rm -rf "$ws_agent_link"
@@ -164,6 +167,9 @@ for target_dir in "$ws_path" "$(dirname "$ws_path")"; do
     ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/.antigravity.md"
     ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/AGENTS.md"
     ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/CLAUDE.md"
+    ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/CURSOR.md"
+    ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/WINDSURF.md"
+    ln -sf "$SUSHI_HOME/copilot-instructions.md" "$target_dir/OPENCODE.md"
     echo -e "        ${BOLD}${GREEN}Linked local instructions:${RESET} in $target_dir"
   fi
 done

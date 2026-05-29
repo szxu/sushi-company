@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# engines — list and switch Sushi's active coding CLI engine.
+
+set -euo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+
+CFG="$COMPANY_DIR/config/engines.json"
+ACTIVE_FILE="$SUSHI_HOME/active-engine"
+
+usage() {
+  echo "Usage: engines [list|current|use <name>|link <name>|unlink <name>]" >&2
+}
+
+engine_json() {
+  python3 - "$CFG" "$@" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+cmd = sys.argv[2]
+engines = cfg.get("engines", {})
+if cmd == "names":
+    print("\n".join(engines))
+elif cmd == "get":
+    name = sys.argv[3]
+    if name not in engines:
+        raise SystemExit(3)
+    print(json.dumps(engines[name]))
+elif cmd == "default":
+    print(cfg.get("default", "copilot"))
+PY
+}
+
+active_engine() {
+  if [[ -f "$ACTIVE_FILE" ]]; then
+    tr -d '[:space:]' < "$ACTIVE_FILE"
+  else
+    engine_json default
+  fi
+}
+
+link_engine() {
+  local name="$1"
+  local timestamp
+  timestamp="$(date +%s)"
+  python3 - "$CFG" "$name" "$HOME" "$SUSHI_HOME" "$timestamp" <<'PY'
+import json, os, shutil, sys
+cfg, name, home, sushi_home, ts = sys.argv[1:]
+engines = json.load(open(cfg)).get("engines", {})
+if name not in engines:
+    print(f"unknown engine: {name}", file=sys.stderr)
+    raise SystemExit(3)
+engine = engines[name]
+dirs = list(engine.get("home_dirs", [])) + list(engine.get("extra_config_dirs", []))
+for rel in dirs:
+    path = os.path.join(home, rel)
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    if os.path.islink(path):
+        os.unlink(path)
+    elif os.path.exists(path):
+        backup = f"{path}.backup-{ts}"
+        shutil.move(path, backup)
+        print(f"backup {path} -> {backup}")
+    os.symlink(sushi_home, path)
+    print(f"linked {path} -> {sushi_home}")
+PY
+}
+
+unlink_engine() {
+  local name="$1"
+  python3 - "$CFG" "$name" "$HOME" <<'PY'
+import json, os, sys
+cfg, name, home = sys.argv[1:]
+engines = json.load(open(cfg)).get("engines", {})
+if name not in engines:
+    print(f"unknown engine: {name}", file=sys.stderr)
+    raise SystemExit(3)
+engine = engines[name]
+dirs = list(engine.get("home_dirs", [])) + list(engine.get("extra_config_dirs", []))
+for rel in dirs:
+    path = os.path.join(home, rel)
+    if os.path.islink(path):
+        os.unlink(path)
+        print(f"unlinked {path}")
+    else:
+        print(f"not linked {path}")
+PY
+}
+
+cmd="${1:-list}"
+case "$cmd" in
+  list)
+    active="$(active_engine)"
+    python3 - "$CFG" "$active" <<'PY'
+import json, shutil, sys
+cfg = json.load(open(sys.argv[1]))
+active = sys.argv[2]
+for name, e in cfg.get("engines", {}).items():
+    marker = "*" if name == active else " "
+    command = e.get("command", name)
+    available = "yes" if shutil.which(command) else "no"
+    print(f"{marker} {name:<10} {command:<12} available={available:<3} {e.get('label','')}")
+    print(f"  {e.get('pitch','')}")
+PY
+    ;;
+  current)
+    active_engine
+    ;;
+  use)
+    name="${2:-}"
+    [[ -n "$name" ]] || { usage; exit 2; }
+    engine_json get "$name" >/dev/null
+    mkdir -p "$SUSHI_HOME"
+    echo "$name" > "$ACTIVE_FILE"
+    link_engine "$name"
+    echo "active engine: $name"
+    ;;
+  link)
+    name="${2:-}"
+    [[ -n "$name" ]] || { usage; exit 2; }
+    link_engine "$name"
+    ;;
+  unlink)
+    name="${2:-}"
+    [[ -n "$name" ]] || { usage; exit 2; }
+    unlink_engine "$name"
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac

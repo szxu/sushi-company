@@ -13,15 +13,14 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
-LOGS_DIR="${LOGS_DIR:-$SUSHI_STATE_DIR/logs}"
 filter="${1:-}"
 mode="${2:-all}"
 
 shopt -s nullglob
 if [[ -n "$filter" ]]; then
-  files=( "$LOGS_DIR/${filter}"*.run.log )
+  files=( "$SUSHI_STATE_DIR"/projects/*/logs/"${filter}"*.run.log "$SUSHI_STATE_DIR"/logs/"${filter}"*.run.log )
 else
-  files=( "$LOGS_DIR"/*.run.log )
+  files=( "$SUSHI_STATE_DIR"/projects/*/logs/*.run.log "$SUSHI_STATE_DIR"/logs/*.run.log )
 fi
 
 if [[ ${#files[@]} -eq 0 ]]; then

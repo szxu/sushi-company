@@ -11,10 +11,11 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
+ensure_project
 
 # --- Click-n-Go Auto-Symlink Management ---
 CWD="$(pwd)"
-for agent_dir in .gemini .agy .claude .copilot; do
+for agent_dir in .gemini .agy .claude .copilot .opencode .cursor .windsurf; do
   target_dir="$CWD/$agent_dir"
   if [[ ! -d "$target_dir" ]]; then
     mkdir -p "$target_dir"
@@ -38,8 +39,8 @@ if [[ $# -eq 0 ]]; then
     --add-dir "$COMPANY_DIR" -s \
     -p "You are Sushi. Douglas just called your name with no other instruction — give him a crisp status report:
 
-1. List any tickets in $TICKETS_DIR/ that are not DONE (show id, title, status).
-2. List the 3 most recent log files in $LOGS_DIR/ with their last status line.
+1. List any tickets in $TICKETS_DIR/ for project $SUSHI_PROJECT_KEY that are not DONE (show id, title, status).
+2. List the 3 most recent log files in $PROJECT_LOGS_DIR/ with their last status line.
 3. One-line system health (agents present in $SUSHI_HOME/agents/, model config loaded).
 4. End with: 'Ready for your next ticket. — Sushi'
 
@@ -50,7 +51,7 @@ fi
 arg="$1"
 
 # Explicit ticket path or id → delegate to ship
-if [[ -f "$arg" || -f "$TICKETS_DIR/$arg.md" ]]; then
+if [[ -f "$arg" || -f "$TICKETS_DIR/$arg.md" || ( "$arg" =~ ^[A-Z]{4}-[0-9]{4}$ && -f "$PROJECTS_DIR/${arg:0:4}/tickets/$arg.md" ) ]]; then
   exec "$BIN_DIR/ship" "$arg"
 fi
 
@@ -70,4 +71,4 @@ CEO_MODEL=$("$BIN_DIR/model-for" ceo)
 $*
 \"\"\"
 
-Decide what to do. If it's a new piece of work, create a ticket file in $TICKETS_DIR/ with a fresh id, then execute it using your standard workflow (delegate to specialists, iterate, ship). If it's a question about the company or an existing ticket, answer it directly. Sign off with '— Sushi'."
+Decide what to do. If it's a new piece of work, create a ticket file in $TICKETS_DIR/ with a fresh $SUSHI_PROJECT_KEY-#### id, then execute it using your standard workflow (delegate to specialists, iterate, ship). If it's a question about the company or an existing ticket, answer it directly. Sign off with '— Sushi'."

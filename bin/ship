@@ -10,7 +10,7 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
-mkdir -p "$TICKETS_DIR" "$LOGS_DIR" "$PROJECTS_DIR"
+ensure_project
 
 if [[ "${1:-}" == "--new" ]]; then
   shift
@@ -25,6 +25,13 @@ else
     ticket_file="$arg"
   elif [[ -f "$TICKETS_DIR/$arg.md" ]]; then
     ticket_file="$TICKETS_DIR/$arg.md"
+  elif [[ "$arg" =~ ^[A-Z]{4}-[0-9]{4}$ && -f "$PROJECTS_DIR/${arg:0:4}/tickets/$arg.md" ]]; then
+    SUSHI_PROJECT_KEY="${arg:0:4}"
+    PROJECT_DIR="$PROJECTS_DIR/$SUSHI_PROJECT_KEY"
+    TICKETS_DIR="$PROJECT_DIR/tickets"
+    PROJECT_WORK_DIR="$PROJECT_DIR/work"
+    PROJECT_LOGS_DIR="$PROJECT_DIR/logs"
+    ticket_file="$TICKETS_DIR/$arg.md"
   else
     echo "Ticket not found: $arg" >&2
     exit 1
@@ -32,8 +39,14 @@ else
 fi
 
 ticket_id=$(basename "$ticket_file" .md)
-project_dir="$PROJECTS_DIR/$ticket_id"
-log_file="$LOGS_DIR/$ticket_id.md"
+if [[ "$ticket_id" =~ ^[A-Z]{4}-[0-9]{4}$ ]]; then
+  SUSHI_PROJECT_KEY="${ticket_id:0:4}"
+  PROJECT_DIR="$PROJECTS_DIR/$SUSHI_PROJECT_KEY"
+  PROJECT_WORK_DIR="$PROJECT_DIR/work"
+  PROJECT_LOGS_DIR="$PROJECT_DIR/logs"
+fi
+project_dir="$PROJECT_WORK_DIR/$ticket_id"
+log_file="$PROJECT_LOGS_DIR/$ticket_id.md"
 mkdir -p "$project_dir"
 
 # --- Preflight: refuse if another ship for this ticket is already running ---
@@ -63,6 +76,7 @@ trap _ship_exit EXIT
 
 echo "=== Shipping $ticket_id ==="
 echo "Ticket:  $ticket_file"
+echo "Project key: $SUSHI_PROJECT_KEY"
 echo "Project: $project_dir"
 echo "Log:     $log_file"
 echo "State:   $SUSHI_STATE_DIR"
@@ -77,6 +91,7 @@ Log file: $log_file
 Model-for helper: $BIN_DIR/model-for (use it to resolve --model for every specialist call)
 Model config: $COMPANY_DIR/config/models.json (read-only reference for the policy)
 Runtime state directory: $SUSHI_STATE_DIR
+Project key: $SUSHI_PROJECT_KEY
 
 Follow your standard workflow: plan, delegate to specialist agents via '$SUSHI_CLI --agent=<role> --model \"\$($BIN_DIR/model-for <role> $ticket_file)\" -p ...', review, iterate, and ship. Do not stop until QA returns APPROVED or you are genuinely blocked."
 

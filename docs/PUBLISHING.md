@@ -74,6 +74,8 @@ company repo.
 - Documentation
 - Example tickets and tiny sample projects
 - Configuration templates
+- Engine profiles
+- Tests and release metadata
 
 ## What stays private
 
@@ -84,3 +86,11 @@ company repo.
 - PID files
 - Windows builds and app artifacts
 - Any source tree or artifact belonging to a user's personal projects
+
+## Release check
+
+```bash
+make test
+bin/doctor
+bin/export-vanilla ~/workspace/sushi-company-vanilla-release
+```

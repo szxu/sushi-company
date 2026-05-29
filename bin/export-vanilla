@@ -28,11 +28,11 @@ copy_item() {
   fi
 }
 
-for rel in README.md Start\ GUI.command .gitignore; do
+for rel in README.md Start\ GUI.command .gitignore VERSION CHANGELOG.md Makefile; do
   copy_item "$rel"
 done
 
-for rel in bin config docs gui skills templates; do
+for rel in bin config docs gui skills templates tests; do
   copy_item "$rel"
 done
 

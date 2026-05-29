@@ -747,9 +747,9 @@
       <!-- ================= PAGE 2: ENGINES MANAGER ================= -->
       <div id="page-engines" class="page-view">
         <div class="glass-card" style="margin-bottom: 30px;">
-          <h2 style="font-family: var(--font-display); font-weight: 600; font-size: 20px; margin-bottom: 10px;">Cross-CLI Symlink Switcher</h2>
+          <h2 style="font-family: var(--font-display); font-weight: 600; font-size: 20px; margin-bottom: 10px;">Engine Switcher</h2>
           <p style="font-size: 14px; color: #a8a4b6; line-height: 1.6; margin-bottom: 30px;">
-            Toggle the symbolic link for each coding CLI engine. When linked, the engine will read and write configuration files, custom agents, and project session history directly from the universal <code>~/.sushi/</code> directory. If an engine already has local settings, they will be safely backed up to <code>~/.&lt;engine&gt;.backup-&lt;timestamp&gt;</code>.
+            Switch between coding engines without changing your company workflow. Use Claude when it is worth it, then switch to Copilot, OpenCode, Cursor, Windsurf, Gemini, or Antigravity when cost or quality points somewhere else.
           </p>
 
           <div class="engines-container" id="engines-grid-container">
@@ -766,6 +766,10 @@
           <div class="glass-card">
             <h2 style="font-family: var(--font-display); font-weight: 600; font-size: 20px; margin-bottom: 25px;">File a New Ticket</h2>
             <form id="new-ticket-form" onsubmit="submitNewTicket(event)">
+              <div class="form-group">
+                <label for="ticket-project">Project Key</label>
+                <input type="text" id="ticket-project" placeholder="SUSH" maxlength="4" pattern="[A-Za-z]{4}">
+              </div>
               <div class="form-group">
                 <label for="ticket-title">Short Title</label>
                 <input type="text" id="ticket-title" placeholder="e.g. Implement /auth router endpoints" required>
@@ -952,18 +956,21 @@
             
             card.innerHTML = `
               <div class="engine-details">
-                <span class="engine-name">${eng} CLI Engine</span>
+                <span class="engine-name">${state.label || eng}</span>
                 <span class="engine-status-badge ${state.is_linked ? 'linked' : 'unlinked'}">
                   <span class="engine-dot ${state.is_linked ? 'linked' : 'unlinked'}"></span>
-                  ${state.is_linked ? 'Shared State Active' : 'Isolated Configuration'}
+                  ${state.active ? 'Active Engine' : (state.is_linked ? 'Shared State Ready' : 'Not Linked')}
                 </span>
                 <span style="font-size: 11px; color: #635f70; font-family: var(--font-mono); margin-top: 4px;">
-                  ${state.is_linked ? 'resolves -> ' + state.resolves_to : 'No symlink active'}
+                  ${state.command || eng} · ${state.pitch || ''}
                 </span>
               </div>
-              <button class="btn ${state.is_linked ? 'btn-secondary' : 'btn-green'}" onclick="toggleSymlink('${eng}')">
-                ${state.is_linked ? 'Unlink Engine' : 'Share State'}
-              </button>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="useEngine('${eng}')">${state.active ? 'Selected' : 'Use'}</button>
+                <button class="btn ${state.is_linked ? 'btn-secondary' : 'btn-green'}" onclick="toggleSymlink('${eng}')">
+                  ${state.is_linked ? 'Unlink' : 'Link'}
+                </button>
+              </div>
             `;
             container.appendChild(card);
           });
@@ -975,7 +982,7 @@
       fetch(`${API_URL}/api/engines/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: json = JSON.stringify({ engine: engine })
+        body: JSON.stringify({ engine: engine })
       })
         .then(res => res.json())
         .then(data => {
@@ -983,6 +990,21 @@
           fetchEnginesData();
         })
         .catch(err => console.error("Error toggling symlink:", err));
+    }
+
+    function useEngine(engine) {
+      fetch(`${API_URL}/api/engines/use`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engine: engine })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status !== "success") alert(data.message);
+          fetchEnginesData();
+          fetchOverviewData();
+        })
+        .catch(err => console.error("Error switching engine:", err));
     }
 
     // --- Ticket Manager API Integration ---
@@ -1033,11 +1055,12 @@
       event.preventDefault();
       const title = document.getElementById("ticket-title").value;
       const desc = document.getElementById("ticket-desc").value;
+      const project = document.getElementById("ticket-project").value || "SUSH";
 
       fetch(`${API_URL}/api/ticket`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title, description: desc })
+        body: JSON.stringify({ project: project, title: title, description: desc })
       })
         .then(res => res.json())
         .then(data => {

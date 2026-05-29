@@ -9,8 +9,6 @@ if [[ -z "${SUSHI_PATHS_LOADED:-}" ]]; then
 
   SUSHI_HOME="${SUSHI_HOME:-$HOME/.sushi}"
   export COPILOT_HOME="${COPILOT_HOME:-$SUSHI_HOME}"
-  SUSHI_CLI="${SUSHI_CLI:-copilot}"
-
   if [[ -z "${COMPANY_DIR:-}" ]]; then
     script_path="${BASH_SOURCE[0]}"
     while [[ -L "$script_path" ]]; do
@@ -25,11 +23,56 @@ if [[ -z "${SUSHI_PATHS_LOADED:-}" ]]; then
   SUSHI_STATE_DIR="${SUSHI_STATE_DIR:-$SUSHI_HOME/company-state}"
   BIN_DIR="$COMPANY_DIR/bin"
   CONFIG_DIR="$COMPANY_DIR/config"
-  TICKETS_DIR="$SUSHI_STATE_DIR/tickets"
+  ACTIVE_ENGINE_FILE="$SUSHI_HOME/active-engine"
+  if [[ -z "${SUSHI_CLI:-}" ]]; then
+    if [[ -f "$ACTIVE_ENGINE_FILE" && -f "$CONFIG_DIR/engines.json" ]]; then
+      active_engine="$(tr -d '[:space:]' < "$ACTIVE_ENGINE_FILE")"
+      SUSHI_CLI="$(python3 - "$CONFIG_DIR/engines.json" "$active_engine" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+name = sys.argv[2]
+print(cfg.get("engines", {}).get(name, {}).get("command") or name or cfg.get("default", "copilot"))
+PY
+)"
+    else
+      SUSHI_CLI="copilot"
+    fi
+  fi
+
   PROJECTS_DIR="$SUSHI_STATE_DIR/projects"
+  CURRENT_PROJECT_FILE="$SUSHI_STATE_DIR/current-project"
+  if [[ -n "${SUSHI_PROJECT_KEY:-}" ]]; then
+    SUSHI_PROJECT_KEY="$(printf '%s' "$SUSHI_PROJECT_KEY" | tr '[:lower:]' '[:upper:]')"
+  elif [[ -f "$CURRENT_PROJECT_FILE" ]]; then
+    SUSHI_PROJECT_KEY="$(tr -d '[:space:]' < "$CURRENT_PROJECT_FILE" | tr '[:lower:]' '[:upper:]')"
+  else
+    SUSHI_PROJECT_KEY="SUSH"
+  fi
+  if [[ ! "$SUSHI_PROJECT_KEY" =~ ^[A-Z]{4}$ ]]; then
+    echo "Invalid SUSHI_PROJECT_KEY: $SUSHI_PROJECT_KEY (expected four uppercase letters)" >&2
+    return 2 2>/dev/null || exit 2
+  fi
+
+  PROJECT_DIR="$PROJECTS_DIR/$SUSHI_PROJECT_KEY"
+  TICKETS_DIR="$PROJECT_DIR/tickets"
+  PROJECT_WORK_DIR="$PROJECT_DIR/work"
+  PROJECT_LOGS_DIR="$PROJECT_DIR/logs"
   LOGS_DIR="$SUSHI_STATE_DIR/logs"
   STATUS_BOARD="$SUSHI_STATE_DIR/STATUS.md"
 
   export SUSHI_HOME SUSHI_CLI COMPANY_DIR SUSHI_STATE_DIR
-  export BIN_DIR CONFIG_DIR TICKETS_DIR PROJECTS_DIR LOGS_DIR STATUS_BOARD
+  export BIN_DIR CONFIG_DIR ACTIVE_ENGINE_FILE
+  export SUSHI_PROJECT_KEY PROJECTS_DIR CURRENT_PROJECT_FILE PROJECT_DIR
+  export TICKETS_DIR PROJECT_WORK_DIR PROJECT_LOGS_DIR LOGS_DIR STATUS_BOARD
 fi
+
+ensure_project() {
+  mkdir -p "$TICKETS_DIR" "$PROJECT_WORK_DIR" "$PROJECT_LOGS_DIR" "$LOGS_DIR"
+  if [[ ! -f "$PROJECT_DIR/project.json" ]]; then
+    python3 - "$PROJECT_DIR/project.json" "$SUSHI_PROJECT_KEY" <<'PY'
+import json, sys
+path, key = sys.argv[1:]
+json.dump({"key": key, "name": f"{key} Project"}, open(path, "w"), indent=2)
+PY
+  fi
+}

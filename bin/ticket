@@ -8,15 +8,37 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/sushi-paths"
-mkdir -p "$TICKETS_DIR"
+
+project_key="$SUSHI_PROJECT_KEY"
+if [[ "${1:-}" == "--project" || "${1:-}" == "--project-key" ]]; then
+  project_key="$(printf '%s' "${2:-}" | tr '[:lower:]' '[:upper:]')"
+  shift 2 || true
+elif [[ "${1:-}" == "--project-name" ]]; then
+  project_name="${2:-}"
+  shift 2 || true
+  "$BIN_DIR/project" create "$project_name" >/dev/null
+  project_key="$(cat "$CURRENT_PROJECT_FILE")"
+fi
+
+if [[ ! "$project_key" =~ ^[A-Z]{4}$ ]]; then
+  echo "Project key must be four uppercase letters, e.g. SUSH" >&2
+  exit 2
+fi
+
+SUSHI_PROJECT_KEY="$project_key"
+PROJECT_DIR="$PROJECTS_DIR/$SUSHI_PROJECT_KEY"
+TICKETS_DIR="$PROJECT_DIR/tickets"
+PROJECT_WORK_DIR="$PROJECT_DIR/work"
+PROJECT_LOGS_DIR="$PROJECT_DIR/logs"
+ensure_project
 
 # Find next ticket id
-last=$(ls "$TICKETS_DIR" 2>/dev/null | grep -Eo '^T-[0-9]+' | sort -V | tail -1 || true)
+last=$(ls "$TICKETS_DIR" 2>/dev/null | grep -Eo "^$SUSHI_PROJECT_KEY-[0-9]+" | sort -V | tail -1 || true)
 if [[ -z "${last:-}" ]]; then
-  next="T-0001"
+  next="$SUSHI_PROJECT_KEY-0001"
 else
-  num=${last#T-}
-  next=$(printf "T-%04d" $((10#$num + 1)))
+  num=${last#"$SUSHI_PROJECT_KEY"-}
+  next=$(printf "%s-%04d" "$SUSHI_PROJECT_KEY" $((10#$num + 1)))
 fi
 
 title="${1:-}"
@@ -32,6 +54,7 @@ cat > "$file" <<EOF
 
 Status: OPEN
 Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Project: $SUSHI_PROJECT_KEY
 
 ## Description
 ${body:-<describe the work>}

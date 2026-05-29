@@ -1,11 +1,17 @@
-# 🍣 Sushi Company — Universal Multi-Agent AI Software Company
+# Sushi Company
 
-A universal, CLI-agnostic, and AI-friendly software company framework built to run entirely inside your terminal or integrate directly with your IDE assistant. You file tickets; the CEO agent plans, delegates to specialist agents, compiles, tests, performs peer code reviews, and iterates until the QA agent approves the build and ships the deliverable.
+Sushi Company is a portable multi-agent software company for vibe coders who do
+not want to be locked into one expensive or underperforming coding tool.
+
+If Claude CLI gets too pricey, Copilot feels weak on a task, Cursor is better
+for editor work, or OpenCode is the better fit for your budget, Sushi lets you
+switch the active engine and keep the same tickets, agents, model policy,
+project history, and QA workflow.
 
 ```
-          Douglas (you)
+          You
                │
-            tickets
+       project tasks
                │
                ▼
           ┌─────────┐
@@ -23,12 +29,18 @@ A universal, CLI-agnostic, and AI-friendly software company framework built to r
 
 ---
 
-## 🚀 Key Features
+## Why Sushi
 
-*   **Universal CLI Driver (`$SUSHI_CLI`)**: Works with any terminal AI CLI engine. Defaults to GitHub Copilot CLI, but easily adapts to other engines.
-*   **Environment Encapsulation**: Runs inside an isolated configuration home directory (`~/.sushi/`) to prevent clashing with your global CLI settings.
-*   **IDE-Assistant Friendly**: Integrates seamlessly with advanced coding assistants (such as Antigravity/`agy`) via local workspace symlinks (`.gemini/agents` and `.agy/agents`).
-*   **10 Specialized AI Specialists**: Includes complete out-of-the-box profiles for a CTO, UI/UX Designer, Frontend dev, Backend dev, Systems/DevOps dev, Unit-tester, BDD-tester, Compiler gatekeeper, Peer Code Reviewer, and QA engineer.
+* **One-click engine switching**: use `engines use copilot`, `engines use claude`,
+  `engines use opencode`, `engines use cursor`, or `engines use windsurf`.
+* **Same company, different brain**: switching engines keeps your tickets,
+  agents, project state, logs, and model routing intact.
+* **Project-based work tracking**: create Jira-style projects with four-letter
+  keys and task IDs like `SUSH-0001`.
+* **Private state outside Git**: runtime state lives in `~/.sushi/company-state`
+  so the framework repo stays shareable.
+* **Specialist roles**: CTO, frontend, backend, systems, unit-test, BDD-test,
+  compiler, code-reviewer, QA, and UI designer profiles.
 
 ---
 
@@ -53,18 +65,20 @@ A universal, CLI-agnostic, and AI-friendly software company framework built to r
   .gemini/agents -> ~/.sushi/agents/  # IDE symlinks so your IDE assistant
   .agy/agents    -> ~/.sushi/agents/  # can read and use the same agent profiles!
   bin/
-    ticket                    # Tool to create a new development ticket
+    project                   # Manage project keys such as SUSH
+    ticket                    # Create project tasks such as SUSH-0001
     ship                      # Executes a ticket end-to-end via the CEO
     sushi                     # Queries the CEO for status reports / ad-hoc requests
+    engines                   # One-command coding engine switching
     models                    # Audits and sets the role-to-model routing policy
     model-for                 # Backend model-resolution helper
     status-board              # Tracks multi-agent running processes
     cost-report               # Parses run logs to calculate total token spend
   config/
     models.json               # Centralized model allocation policy
-  tickets/                    # Private runtime state; defaults outside repo
-  projects/                   # Private per-ticket working directories
-  logs/                       # Private run logs and delegation trails
+  projects/<KEY>/tickets/     # Private project task files
+  projects/<KEY>/work/        # Private per-task working directories
+  projects/<KEY>/logs/        # Private project run logs
   docs/                       # Detailed architectural references
 ```
 
@@ -97,20 +111,33 @@ A universal, CLI-agnostic, and AI-friendly software company framework built to r
 
 ---
 
-## ⚡ How to Switch CLI Engines
-
-By default, the scripts execute using the `copilot` CLI engine under the isolated home directory `$HOME/.sushi`. You can effortlessly swap drivers to other AI engines by exporting the `SUSHI_CLI` environment variable:
+## First 10 Minutes
 
 ```bash
-# Default (GitHub Copilot CLI)
-export SUSHI_CLI="copilot"
-
-# Swap to custom Claude CLI engine
-export SUSHI_CLI="claude-cli"
-
-# Swap to custom Gemini / Antigravity CLI engine
-export SUSHI_CLI="agy"
+git clone git@github.com:<you>/sushi-company.git
+cd sushi-company
+./bin/sushi-init "$PWD"
+./bin/doctor
+./bin/engines list
+./bin/engines use copilot
+./bin/project create "Sushi Company" SUSH
+./bin/ticket "Add a health check" "GET /health returns ok"
+./bin/ship SUSH-0001
 ```
+
+## Switch Coding Engines
+
+```bash
+engines list
+engines use claude
+engines use opencode
+engines use cursor
+engines use windsurf
+```
+
+Sushi links the selected tool's config directory to `~/.sushi` where possible,
+then records the active engine in `~/.sushi/active-engine`. New `ship` runs use
+that engine automatically through `SUSHI_CLI`.
 
 ---
 
@@ -134,22 +161,29 @@ export SUSHI_STATE_DIR=/path/to/private/state
 This keeps the framework repo safe to publish without personal projects or large
 build artifacts. See `docs/PUBLISHING.md` for the vanilla export workflow.
 
-### 1. File a Ticket
+### 1. Create a Project
+
+```bash
+project create "Sushi Company" SUSH
+project use SUSH
+```
+
+### 2. File a Task
 Create a new ticket from the command line:
 ```bash
 ticket "Add a /health API endpoint" "Implement GET /health returning status: ok"
-# Prints path: ~/.sushi/company-state/tickets/T-0003.md
+# Prints path: ~/.sushi/company-state/projects/SUSH/tickets/SUSH-0001.md
 ```
 
-### 2. Ship the Ticket
+### 3. Ship the Task
 Hand the ticket to the CEO to execute:
 ```bash
-ship T-0003
+ship SUSH-0001
 ```
 
 The CEO will immediately:
-1. Parse the ticket and create `projects/T-0003/` as the working directory.
-2. Outline a delegation plan in `logs/T-0003.md`.
+1. Parse the task and create `projects/SUSH/work/SUSH-0001/` as the working directory.
+2. Outline a delegation plan in `projects/SUSH/logs/SUSH-0001.md`.
 3. Invoke the **`cto`** to generate a JSON step-by-step task execution plan.
 4. Execute the tasks in sequence using the designated **`backend`** or **`frontend`** specialists.
 5. Invoke the **`compiler`** to ensure the build compiles and lints with zero errors.
