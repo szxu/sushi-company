@@ -1,5 +1,7 @@
 # Sushi Company
 
+![Su Dongpo enjoying sushi with chopsticks](assets/su-dongpo-eating-sushi.png)
+
 Sushi Company is a portable multi-agent software company for vibe coders who do
 not want to be locked into one expensive or underperforming coding tool.
 
