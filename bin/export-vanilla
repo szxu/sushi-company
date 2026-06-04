@@ -28,7 +28,7 @@ copy_item() {
   fi
 }
 
-for rel in README.md Start\ GUI.command .gitignore VERSION CHANGELOG.md Makefile; do
+for rel in README.md Start\ GUI.command .gitignore VERSION CHANGELOG.md Makefile package.json package-lock.json playwright.config.js; do
   copy_item "$rel"
 done
 

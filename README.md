@@ -46,6 +46,9 @@ project history, and QA workflow.
 * **Workflow skills baked in**: brainstorming, writing plans, TDD, systematic
   debugging, code review, and verification skills are included as repo-local
   `SKILL.md` files inspired by `obra/superpowers`.
+* **Two test gates**: `make test` runs the unit gate and browser BDD gate; the
+  vanilla Linux BDD gate verifies the public export on a clean system with a
+  `DEMO` example task.
 
 ---
 

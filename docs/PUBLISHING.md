@@ -91,6 +91,13 @@ company repo.
 
 ```bash
 make test
+make bdd-vanilla
+make bdd-vanilla-linux
 bin/doctor
 bin/export-vanilla ~/workspace/sushi-company-vanilla-release
 ```
+
+`make test` runs the unit gate and browser BDD gate. `make bdd-vanilla`
+exports a clean vanilla framework and verifies the Web UI with one `DEMO`
+example task. `make bdd-vanilla-linux` runs the same vanilla BDD scenario in a
+clean Linux Playwright container and is the pre-publish compatibility gate.

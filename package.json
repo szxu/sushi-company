@@ -1,0 +1,12 @@
+{
+  "name": "sushi-company",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "bdd": "playwright test",
+    "bdd:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}

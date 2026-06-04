@@ -18,11 +18,11 @@ Updated: 2026-05-29
 - [x] README highlights the core selling point: switch away from an expensive or weak coding tool without losing the company workflow.
 - [x] Versioning and changelog added.
 - [x] Ticket templates added for web apps, CLI tools, bug fixes, and research spikes.
+- [x] Unit and browser BDD gates added, including clean vanilla Linux Web UI verification.
 
 ## Still Useful Later
 
 - [ ] Add a richer sample app under `examples/`.
-- [ ] Add real integration tests for the browser GUI.
 - [ ] Add status reconciliation between task files, logs, and status board.
 - [ ] Add optional hosted docs site.
 - [ ] Add shell completions for `engines`, `project`, `ticket`, and `ship`.
