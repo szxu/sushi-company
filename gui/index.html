@@ -310,6 +310,30 @@
       gap: 12px;
     }
 
+    .project-task-groups {
+      display: grid;
+      gap: 16px;
+    }
+
+    .project-task-group {
+      display: grid;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .project-task-group:first-child {
+      padding-top: 0;
+      border-top: 0;
+    }
+
+    .project-task-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
     .lane {
       display: grid;
       align-content: start;
@@ -479,7 +503,7 @@
           </div>
           <div class="panel">
             <div class="panel-head">
-              <h2 class="panel-title">Current Project Tasks</h2>
+              <h2 class="panel-title">Project Tasks</h2>
             </div>
             <div class="item-list" id="overview-tasks"></div>
           </div>
@@ -543,10 +567,10 @@
           </form>
           <div class="panel">
             <div class="panel-head">
-              <h2 class="panel-title">Task Board</h2>
+              <h2 class="panel-title">Tasks by Project</h2>
               <button onclick="loadAll()">Refresh</button>
             </div>
-            <div class="kanban" id="task-board"></div>
+            <div class="project-task-groups" id="task-board"></div>
           </div>
         </div>
       </section>
@@ -601,6 +625,7 @@
       status: null,
       projects: [],
       tickets: [],
+      projectTickets: {},
       engines: {},
       activeEngine: "copilot",
       activeProject: "SUSH",
@@ -655,12 +680,13 @@
     }
 
     function renderShell() {
+      const allTickets = Object.values(state.projectTickets).flat();
       document.getElementById("active-project").textContent = state.activeProject;
       document.getElementById("active-engine").textContent = state.activeEngine;
       document.getElementById("state-dir").textContent = state.status?.state_dir?.replace(`${location.origin}`, "") || "~/.sushi";
       document.getElementById("metric-project").textContent = state.activeProject;
       document.getElementById("metric-engine").textContent = state.activeEngine;
-      document.getElementById("metric-open").textContent = state.tickets.filter(t => t.status !== "DONE").length;
+      document.getElementById("metric-open").textContent = allTickets.filter(t => t.status !== "DONE").length;
       document.getElementById("metric-runs").textContent = state.status?.active_processes?.length || 0;
       document.getElementById("task-project").value = state.activeProject;
       document.getElementById("ticket-project")?.setAttribute("value", state.activeProject);
@@ -719,16 +745,66 @@
 
     function renderTasks() {
       const lanes = ["Open", "In Progress", "Blocked", "Done"];
-      document.getElementById("overview-tasks").innerHTML = state.tickets.slice(0, 5).map(taskItem).join("") || `<div class="muted">No tasks yet.</div>`;
-      document.getElementById("task-board").innerHTML = lanes.map(lane => {
-        const tasks = state.tickets.filter(t => groupStatus(t.status) === lane);
+      const projects = orderedProjectsWithTasks();
+      document.getElementById("overview-tasks").innerHTML = projects.length ? projects.map(projectSummary).join("") : `<div class="muted">No tasks yet.</div>`;
+      document.getElementById("task-board").innerHTML = projects.length ? projects.map(project => {
+        const tasksForProject = state.projectTickets[project.key] || [];
         return `
-          <div class="lane">
-            <div class="lane-title"><span>${lane}</span><span>${tasks.length}</span></div>
-            ${tasks.map(taskCard).join("") || `<div class="muted small">Empty</div>`}
+          <div class="project-task-group">
+            <div class="project-task-head">
+              <div>
+                <div class="code">${esc(project.key)}</div>
+                <div>${esc(project.name || `${project.key} Project`)}</div>
+              </div>
+              <div class="badge-row">
+                <span class="badge">${tasksForProject.filter(t => t.status !== "DONE").length} open</span>
+                <span class="badge green">${tasksForProject.filter(t => t.status === "DONE").length} done</span>
+              </div>
+            </div>
+            <div class="kanban">
+              ${lanes.map(lane => {
+                const tasks = tasksForProject.filter(t => groupStatus(t.status) === lane);
+                return `
+                  <div class="lane">
+                    <div class="lane-title"><span>${lane}</span><span>${tasks.length}</span></div>
+                    ${tasks.map(taskCard).join("") || `<div class="muted small">Empty</div>`}
+                  </div>
+                `;
+              }).join("")}
+            </div>
           </div>
         `;
-      }).join("");
+      }).join("") : `<div class="muted">No project tasks yet.</div>`;
+    }
+
+    function orderedProjectsWithTasks() {
+      return state.projects
+        .map(project => ({ ...project, tickets: state.projectTickets[project.key] || [] }))
+        .filter(project => project.tickets.length > 0)
+        .sort((a, b) => Number(b.key === state.activeProject) - Number(a.key === state.activeProject) || a.key.localeCompare(b.key));
+    }
+
+    function projectSummary(project) {
+      const tasks = project.tickets || [];
+      const open = tasks.filter(t => t.status !== "DONE").length;
+      const done = tasks.filter(t => t.status === "DONE").length;
+      return `
+        <div class="list-item">
+          <div class="list-top">
+            <div>
+              <div class="code">${esc(project.key)}</div>
+              <div>${esc(project.name || `${project.key} Project`)}</div>
+            </div>
+            <span class="badge ${project.key === state.activeProject ? "teal" : ""}">${project.key === state.activeProject ? "Active" : "Project"}</span>
+          </div>
+          <div class="badge-row">
+            <span class="badge">${open} open</span>
+            <span class="badge green">${done} done</span>
+            <span class="badge">${tasks.length} total</span>
+          </div>
+          ${tasks.slice(0, 3).map(task => `<div class="small"><span class="code">${esc(task.id)}</span> ${esc(task.title)}</div>`).join("")}
+        </div>
+      `;
     }
 
     function taskItem(task) {
@@ -926,9 +1002,12 @@
         renderProjects();
         renderEngines();
         renderModels(models);
-        return api(`/api/tickets?project=${encodeURIComponent(state.activeProject)}`);
-      }).then(tasks => {
-        state.tickets = tasks.tickets || [];
+        return Promise.all(state.projects.map(project =>
+          api(`/api/tickets?project=${encodeURIComponent(project.key)}`).then(data => [project.key, data.tickets || []])
+        ));
+      }).then(ticketGroups => {
+        state.projectTickets = Object.fromEntries(ticketGroups);
+        state.tickets = state.projectTickets[state.activeProject] || [];
         renderShell();
         renderTasks();
         loadLogs();
