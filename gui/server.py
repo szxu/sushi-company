@@ -10,12 +10,12 @@ import re
 import subprocess
 from urllib.parse import urlparse, parse_qs
 
-PORT = 8444
+PORT = int(os.environ.get("SUSHI_GUI_PORT", "8444"))
 WORKSPACE_DIR = os.environ.get(
     "COMPANY_DIR",
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
 )
-SUSHI_HOME = os.path.expanduser("~/.sushi")
+SUSHI_HOME = os.environ.get("SUSHI_HOME", os.path.expanduser("~/.sushi"))
 STATE_DIR = os.environ.get(
     "SUSHI_STATE_DIR",
     os.path.join(SUSHI_HOME, "company-state"),
@@ -46,6 +46,24 @@ def project_dirs(project_key=None):
         "tickets": os.path.join(project_dir, "tickets"),
         "work": os.path.join(project_dir, "work"),
         "logs": os.path.join(project_dir, "logs"),
+    }
+
+def parse_ticket_file(path, project_key):
+    with open(path, 'r') as f:
+        content = f.read()
+
+    title_match = re.search(r'^#\s+([A-Z]{4}-\d{4})\s*(?::|--?|—)\s*(.*)$', content, re.M)
+    status_match = re.search(r'^(?:\*\*)?Status(?:\*\*)?:\s*(.*)$', content, re.M)
+    created_match = re.search(r'^(?:\*\*)?Created(?:\*\*)?:\s*(.*)$', content, re.M)
+    if not title_match:
+        return None
+    return {
+        "id": title_match.group(1),
+        "title": title_match.group(2).strip(),
+        "status": status_match.group(1).strip() if status_match else "UNKNOWN",
+        "created": created_match.group(1).strip() if created_match else "UNKNOWN",
+        "project": project_key,
+        "filename": os.path.basename(path),
     }
 
 class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
@@ -100,9 +118,13 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
         if path == "/api/status":
             response = self.get_sushi_status()
         elif path == "/api/tickets":
-            response = self.get_tickets()
+            response = self.get_tickets(query.get("project", [None])[0])
         elif path == "/api/projects":
             response = self.get_projects()
+        elif path == "/api/doctor":
+            response = self.get_doctor()
+        elif path == "/api/logs":
+            response = self.get_logs(query)
         elif path == "/api/models":
             response = self.get_models()
         elif path == "/api/engines":
@@ -194,31 +216,17 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
             "current_project": current_project_key()
         }
 
-    def get_tickets(self):
-        query_key = current_project_key()
+    def get_tickets(self, project_key=None):
+        query_key = (project_key or current_project_key()).upper()
         tickets_dir = project_dirs(query_key)["tickets"]
         tickets = []
         if os.path.exists(tickets_dir):
             for filename in sorted(os.listdir(tickets_dir)):
                 if filename.endswith(".md"):
                     path = os.path.join(tickets_dir, filename)
-                    with open(path, 'r') as f:
-                        content = f.read()
-                    
-                    # Extract title, status, and created date
-                    title_match = re.search(r'^#\s+([A-Z]{4}-\d{4})\s*(?::|--?|—)\s*(.*)$', content, re.M)
-                    status_match = re.search(r'^(?:\*\*)?Status(?:\*\*)?:\s*(.*)$', content, re.M)
-                    created_match = re.search(r'^(?:\*\*)?Created(?:\*\*)?:\s*(.*)$', content, re.M)
-
-                    if title_match:
-                        tickets.append({
-                            "id": title_match.group(1),
-                            "title": title_match.group(2).strip(),
-                            "status": status_match.group(1).strip() if status_match else "UNKNOWN",
-                            "created": created_match.group(1).strip() if created_match else "UNKNOWN",
-                            "project": query_key,
-                            "filename": filename
-                        })
+                    ticket = parse_ticket_file(path, query_key)
+                    if ticket:
+                        tickets.append(ticket)
         return {"tickets": tickets}
 
     def get_projects(self):
@@ -239,8 +247,49 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
                         display_name = json.load(f).get("name", display_name)
                 except Exception:
                     pass
-            projects.append({"key": name, "name": display_name, "active": name == active})
+            ticket_data = self.get_tickets(name).get("tickets", [])
+            open_count = len([t for t in ticket_data if t["status"] != "DONE"])
+            done_count = len([t for t in ticket_data if t["status"] == "DONE"])
+            projects.append({
+                "key": name,
+                "name": display_name,
+                "active": name == active,
+                "open": open_count,
+                "done": done_count,
+                "total": len(ticket_data),
+            })
         return {"projects": projects, "current": active}
+
+    def get_doctor(self):
+        bin_doctor = os.path.join(WORKSPACE_DIR, "bin", "doctor")
+        env = os.environ.copy()
+        env["SUSHI_STATE_DIR"] = STATE_DIR
+        env["SUSHI_HOME"] = SUSHI_HOME
+        proc = subprocess.run([bin_doctor], capture_output=True, text=True, env=env)
+        lines = [line for line in (proc.stdout + proc.stderr).splitlines() if line.strip()]
+        return {
+            "status": "pass" if proc.returncode == 0 else "fail",
+            "returncode": proc.returncode,
+            "lines": lines,
+        }
+
+    def get_logs(self, query):
+        project_key = query.get("project", [current_project_key()])[0].upper()
+        logs_dir = project_dirs(project_key)["logs"]
+        logs = []
+        if os.path.exists(logs_dir):
+            for filename in sorted(os.listdir(logs_dir), reverse=True):
+                if filename.endswith(".md") or filename.endswith(".run.log"):
+                    path = os.path.join(logs_dir, filename)
+                    stat = os.stat(path)
+                    logs.append({
+                        "ticket": filename.replace(".run.log", "").replace(".md", ""),
+                        "filename": filename,
+                        "project": project_key,
+                        "modified": stat.st_mtime,
+                        "size": stat.st_size,
+                    })
+        return {"logs": logs[:40]}
 
     def create_ticket(self, data):
         title = data.get("title", "Untitled Ticket")
@@ -350,7 +399,9 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
         if not engine:
             return {"status": "error", "message": "Missing engine"}
         bin_engines = os.path.join(WORKSPACE_DIR, "bin", "engines")
-        proc = subprocess.run([bin_engines, "use", engine], capture_output=True, text=True)
+        env = os.environ.copy()
+        env["SUSHI_HOME"] = SUSHI_HOME
+        proc = subprocess.run([bin_engines, "use", engine], capture_output=True, text=True, env=env)
         if proc.returncode == 0:
             return {"status": "success", "message": proc.stdout.strip()}
         return {"status": "error", "message": proc.stderr or proc.stdout}
