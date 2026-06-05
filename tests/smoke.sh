@@ -46,6 +46,22 @@ third="$("$ROOT/bin/ticket" --project OPEN "Try OpenCode" "Switch engine")"
 [[ "$third" == "$TMP_STATE/projects/OPEN/tickets/OPEN-0001.md" ]]
 
 "$ROOT/bin/engines" list | grep -q opencode
+for engine in codex aider continue goose cline junie zed tabby kilo; do
+  "$ROOT/bin/engines" list | grep -q "^  $engine"
+done
+python3 - "$ROOT/config/engines.json" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))["engines"]
+assert ".codex" in cfg["codex"]["home_dirs"]
+assert ".aider.conf.yml" in cfg["aider"]["home_files"]
+assert ".continue" in cfg["continue"]["home_dirs"]
+assert ".config/goose" in cfg["goose"]["home_dirs"]
+assert ".clinerules" in cfg["cline"]["workspace_dirs"]
+assert ".junie" in cfg["junie"]["home_dirs"]
+assert ".config/zed" in cfg["zed"]["home_dirs"]
+assert ".tabby-client" in cfg["tabby"]["home_dirs"]
+assert ".config/kilo" in cfg["kilo"]["home_dirs"]
+PY
 "$ROOT/bin/engines" use opencode >/tmp/sushi-engine.out
 grep -q "active engine: opencode" /tmp/sushi-engine.out
 [[ "$("$ROOT/bin/engines" current)" == "opencode" ]]

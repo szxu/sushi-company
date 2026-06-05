@@ -734,6 +734,7 @@
               <span class="badge ${engine.active ? "gold" : engine.is_linked ? "green" : ""}">${engine.active ? "Active" : engine.is_linked ? "Linked" : "Not Linked"}</span>
             </div>
             <div class="muted small">${esc(engine.command)} · ${esc(engine.pitch || "")}</div>
+            <div class="muted small">${engineLocations(engine).map(esc).join(" · ")}</div>
           </div>
           <div class="engine-actions">
             <button class="primary" onclick="useEngine('${esc(id)}')">${engine.active ? "Selected" : "Use"}</button>
@@ -741,6 +742,15 @@
           </div>
         </div>
       `).join("");
+    }
+
+    function engineLocations(engine) {
+      const home = [...(engine.home_dirs || []), ...(engine.home_files || [])];
+      const workspace = [...(engine.workspace_dirs || []), ...(engine.workspace_files || [])];
+      const labels = [];
+      if (home.length) labels.push(`home: ${home.join(", ")}`);
+      if (workspace.length) labels.push(`workspace: ${workspace.join(", ")}`);
+      return labels;
     }
 
     function renderTasks() {

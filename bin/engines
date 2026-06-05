@@ -101,6 +101,14 @@ for name, e in cfg.get("engines", {}).items():
     available = "yes" if shutil.which(command) else "no"
     print(f"{marker} {name:<10} {command:<12} available={available:<3} {e.get('label','')}")
     print(f"  {e.get('pitch','')}")
+    locations = (
+        list(e.get("home_dirs", []))
+        + list(e.get("home_files", []))
+        + list(e.get("workspace_dirs", []))
+        + list(e.get("workspace_files", []))
+    )
+    if locations:
+        print(f"  config: {', '.join(locations)}")
 PY
     ;;
   current)

@@ -34,7 +34,10 @@ project history, and QA workflow.
 ## Why Sushi
 
 * **One-click engine switching**: use `engines use copilot`, `engines use claude`,
-  `engines use opencode`, `engines use cursor`, or `engines use windsurf`.
+  `engines use opencode`, `engines use cursor`, `engines use codex`,
+  `engines use aider`, `engines use continue`, `engines use goose`,
+  `engines use cline`, `engines use junie`, `engines use zed`,
+  `engines use tabby`, or `engines use kilo`.
 * **Same company, different brain**: switching engines keeps your tickets,
   agents, project state, logs, and model routing intact.
 * **Project-based work tracking**: create Jira-style projects with four-letter
@@ -142,6 +145,15 @@ engines use claude
 engines use opencode
 engines use cursor
 engines use windsurf
+engines use codex
+engines use aider
+engines use continue
+engines use goose
+engines use cline
+engines use junie
+engines use zed
+engines use tabby
+engines use kilo
 ```
 
 Sushi links the selected tool's config directory to `~/.sushi` where possible,

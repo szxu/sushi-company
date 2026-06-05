@@ -340,18 +340,32 @@ class SushiAPIHandler(http.server.SimpleHTTPRequestHandler):
         states = {}
         for name, engine in cfg.get("engines", {}).items():
             home_dirs = engine.get("home_dirs", [])
-            primary = home_dirs[0] if home_dirs else f".{name}"
+            home_files = engine.get("home_files", [])
+            tracked_home_paths = home_dirs + home_files
+            primary = tracked_home_paths[0] if tracked_home_paths else f".{name}"
             path = os.path.expanduser(f"~/{primary}")
             is_linked = os.path.islink(path)
             resolves_to = os.readlink(path) if is_linked else ""
+            existing_paths = [
+                rel for rel in tracked_home_paths
+                if os.path.exists(os.path.expanduser(f"~/{rel}")) or os.path.islink(os.path.expanduser(f"~/{rel}"))
+            ]
+            linked_paths = [
+                rel for rel in home_dirs
+                if os.path.islink(os.path.expanduser(f"~/{rel}")) and SUSHI_HOME in os.readlink(os.path.expanduser(f"~/{rel}"))
+            ]
             command = engine.get("command", name)
             states[name] = {
                 "label": engine.get("label", name),
                 "command": command,
                 "pitch": engine.get("pitch", ""),
-                "exists": os.path.exists(path) or is_linked,
-                "is_linked": is_linked and (SUSHI_HOME in resolves_to),
+                "exists": bool(existing_paths),
+                "is_linked": bool(linked_paths),
                 "resolves_to": resolves_to,
+                "home_dirs": home_dirs,
+                "home_files": home_files,
+                "workspace_dirs": engine.get("workspace_dirs", []),
+                "workspace_files": engine.get("workspace_files", []),
                 "active": name == active
             }
         return {"engines": states, "active": active}

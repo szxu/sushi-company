@@ -51,6 +51,80 @@
       "home_dirs": [".windsurf"],
       "workspace_dirs": [".windsurf"],
       "pitch": "Another editor/agent option for comparing quality and cost."
+    },
+    "codex": {
+      "label": "OpenAI Codex CLI",
+      "command": "codex",
+      "home_dirs": [".codex"],
+      "workspace_dirs": [".codex"],
+      "workspace_files": ["AGENTS.md"],
+      "pitch": "OpenAI's terminal coding agent; good fit when you want a GPT/Codex-native workflow."
+    },
+    "aider": {
+      "label": "Aider",
+      "command": "aider",
+      "home_files": [".aider.conf.yml", ".aider.model.settings.yml", ".aider.model.metadata.json"],
+      "workspace_files": [".aider.conf.yml", ".aiderignore", ".env"],
+      "pitch": "Popular terminal pair-programmer with strong git-aware editing and low lock-in."
+    },
+    "continue": {
+      "label": "Continue",
+      "command": "cn",
+      "home_dirs": [".continue"],
+      "workspace_dirs": [".continue"],
+      "home_files": [".continue/config.yaml"],
+      "pitch": "Open-source IDE and CLI assistant for teams that want portable model/config choices."
+    },
+    "goose": {
+      "label": "Goose",
+      "command": "goose",
+      "home_dirs": [".config/goose"],
+      "workspace_dirs": [".goose"],
+      "home_files": [".config/goose/config.yaml"],
+      "pitch": "Open-source local agent with YAML config, extensions, permissions, and prompts."
+    },
+    "cline": {
+      "label": "Cline",
+      "command": "cline",
+      "home_dirs": ["Documents/Cline/Rules", "Cline/Rules"],
+      "workspace_dirs": [".clinerules"],
+      "workspace_files": [".clineignore", "AGENTS.md", ".cursorrules", ".windsurfrules"],
+      "pitch": "Popular editor/terminal agent with project rules and memory-bank workflows."
+    },
+    "junie": {
+      "label": "JetBrains Junie",
+      "command": "junie",
+      "home_dirs": [".junie"],
+      "workspace_dirs": [".junie"],
+      "home_files": [".junie/config.json", ".junie/settings.json"],
+      "workspace_files": [".junie/config.json", ".junie/guidelines.md", "AGENTS.md"],
+      "pitch": "JetBrains-native agent option for developers living in IntelliJ, PyCharm, WebStorm, and friends."
+    },
+    "zed": {
+      "label": "Zed AI",
+      "command": "zed",
+      "home_dirs": [".config/zed"],
+      "workspace_dirs": [".zed"],
+      "home_files": [".config/zed/AGENTS.md"],
+      "workspace_files": [".rules", ".cursorrules", "CLAUDE.md", "AGENTS.md"],
+      "pitch": "Fast editor workflow with global AGENTS.md rules and project-level AI rule files."
+    },
+    "tabby": {
+      "label": "Tabby",
+      "command": "tabby",
+      "home_dirs": [".tabby", ".tabby-client"],
+      "workspace_dirs": [".tabby"],
+      "home_files": [".tabby/config.toml", ".tabby-client/agent/config.toml"],
+      "pitch": "Self-hosted coding assistant option for teams that want local/control-first infrastructure."
+    },
+    "kilo": {
+      "label": "Kilo Code",
+      "command": "kilo",
+      "home_dirs": [".config/kilo"],
+      "workspace_dirs": [".kilo"],
+      "home_files": [".config/kilo/kilo.jsonc"],
+      "workspace_files": ["kilo.jsonc", ".kilocodeignore"],
+      "pitch": "Open-source IDE/CLI coding assistant with project rules and configurable permissions."
     }
   }
 }
