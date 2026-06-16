@@ -13,6 +13,10 @@ let server;
 let tmpRoot;
 let env;
 
+async function gotoApp(page) {
+  await page.goto(baseURL, { waitUntil: "domcontentloaded", timeout: 10000 });
+}
+
 function runBin(name, args = []) {
   return execFileSync(path.join(root, "bin", name), args, {
     env,
@@ -40,6 +44,24 @@ async function withIssueTaskOnFailure(title, detail, fn) {
     createIssueTask(title, `${detail}\n\nDetected failure:\n${error.message}`);
     throw error;
   }
+}
+
+async function expectNoHorizontalOverflow(page, selector) {
+  const offenders = await page.locator(selector).evaluateAll(elements => elements
+    .map((element, index) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        index,
+        text: element.textContent.trim().slice(0, 80),
+        left: rect.left,
+        right: rect.right,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth
+      };
+    })
+    .filter(item => item.left < -1 || item.right > window.innerWidth + 1 || item.scrollWidth > item.clientWidth + 1)
+  );
+  expect(offenders, `${selector} should fit horizontally`).toEqual([]);
 }
 
 async function waitForServer(request) {
@@ -102,7 +124,7 @@ test.afterAll(async () => {
 });
 
 test("web UI loads and shows project task groups", async ({ page }) => {
-  await page.goto(baseURL);
+  await gotoApp(page);
   await expect(page.locator(".brand-title")).toHaveText("Sushi Company");
   await expect(page.getByText("Project Tasks")).toBeVisible();
   await expect(page.locator("#overview-tasks").getByText("DEMO", { exact: true })).toBeVisible();
@@ -119,7 +141,7 @@ test("web UI loads and shows project task groups", async ({ page }) => {
 });
 
 test("creating a task through the UI adds it to the selected project", async ({ page }) => {
-  await page.goto(baseURL);
+  await gotoApp(page);
   await page.getByRole("button", { name: "Tasks" }).first().click();
   await page.locator("#task-project").fill("DEMO");
   await page.locator("#task-title").fill("Second example task");
@@ -129,8 +151,37 @@ test("creating a task through the UI adds it to the selected project", async ({ 
   await expect(page.locator("#task-board").getByText("Second example task")).toBeVisible();
 });
 
+test("tasks page fits laptop viewport without clipped form fields or wrapped task IDs", async ({ page }) => {
+  await withIssueTaskOnFailure(
+    "Fix laptop task layout overflow",
+    "The BDD laptop layout scenario detected clipped form fields, horizontal overflow, or wrapped task IDs.",
+    async () => {
+      await page.setViewportSize({ width: 1366, height: 768 });
+      const ticketId = mode === "vanilla" ? "DEMO-0001" : "SUSH-0001";
+      await gotoApp(page);
+      await page.getByRole("button", { name: "Tasks" }).first().click();
+      await expect(page.getByText("Tasks by Project")).toBeVisible();
+      await expect(page.locator("#task-board").getByText(ticketId)).toBeVisible();
+
+      const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(documentWidth, "document should not have horizontal overflow").toBeLessThanOrEqual(1366);
+      await expectNoHorizontalOverflow(page, "#page-tasks .panel, #page-tasks input, #page-tasks textarea, #page-tasks button, #page-tasks .task-card, #page-tasks .code");
+
+      const wrappedCodes = await page.locator("#page-tasks .task-card .code").evaluateAll(elements => elements
+        .map(element => ({
+          text: element.textContent.trim(),
+          height: element.getBoundingClientRect().height,
+          lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight)
+        }))
+        .filter(item => item.height > item.lineHeight * 1.5)
+      );
+      expect(wrappedCodes, "task IDs should stay on one line").toEqual([]);
+    }
+  );
+});
+
 test("doctor panel runs from the browser UI", async ({ page }) => {
-  await page.goto(baseURL);
+  await gotoApp(page);
   await page.getByRole("button", { name: "Run Doctor" }).click();
   await expect(page.locator("#doctor-status")).toContainText(/PASS|FAIL/);
 });
@@ -141,7 +192,7 @@ test("shipping from the Web UI starts a run without a duplicate-run abort", asyn
     "The BDD Ship button scenario detected that a GUI-triggered ship did not start cleanly.",
     async () => {
       const ticketId = mode === "vanilla" ? "DEMO-0001" : "SUSH-0001";
-      await page.goto(baseURL);
+      await gotoApp(page);
       await page.getByRole("button", { name: "Tasks" }).first().click();
       const taskCard = page.locator(".task-card").filter({ hasText: ticketId }).first();
       await expect(taskCard).toBeVisible();

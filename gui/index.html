@@ -283,6 +283,7 @@
       color: var(--blue);
       font-size: 13px;
       font-weight: 800;
+      white-space: nowrap;
     }
 
     .muted {
@@ -304,9 +305,21 @@
       gap: 12px;
     }
 
+    .tasks-layout {
+      display: grid;
+      gap: 14px;
+    }
+
+    .task-form-grid {
+      display: grid;
+      grid-template-columns: 120px minmax(260px, 1fr) minmax(320px, 1.4fr) 160px;
+      gap: 12px;
+      align-items: end;
+    }
+
     .kanban {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
       gap: 12px;
     }
 
@@ -348,10 +361,16 @@
     .lane-title {
       display: flex;
       justify-content: space-between;
+      gap: 8px;
       font-size: 13px;
       color: var(--muted);
       font-weight: 800;
       text-transform: uppercase;
+    }
+
+    .lane-title span:first-child {
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .task-card {
@@ -361,6 +380,7 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel);
+      min-width: 0;
     }
 
     .engine-card {
@@ -419,7 +439,10 @@
 
     @media (max-width: 1000px) {
       .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .grid-3, .grid-2, .kanban { grid-template-columns: 1fr; }
+      .grid-3, .grid-2 { grid-template-columns: 1fr; }
+      .kanban { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+      .task-form-grid { grid-template-columns: 120px minmax(0, 1fr); }
+      .task-form-grid .full-row { grid-column: 1 / -1; }
       .engine-card { grid-template-columns: 1fr; }
     }
 
@@ -431,7 +454,8 @@
       .topbar { display: grid; }
       h1 { font-size: 23px; }
       .grid-4 { grid-template-columns: 1fr; }
-      .form-grid { grid-template-columns: 1fr; }
+      .form-grid, .task-form-grid, .kanban { grid-template-columns: 1fr; }
+      .task-form-grid .full-row { grid-column: auto; }
       .panel { padding: 13px; }
       .list-top { display: grid; }
       .terminal { height: 58vh; }
@@ -546,10 +570,10 @@
       </section>
 
       <section class="page" id="page-tasks">
-        <div class="grid-2">
+        <div class="tasks-layout">
           <form class="panel form-stack" onsubmit="createTask(event)">
             <h2 class="panel-title">New Task</h2>
-            <div class="form-grid">
+            <div class="task-form-grid">
               <div>
                 <label for="task-project">Project</label>
                 <input id="task-project" maxlength="4" pattern="[A-Za-z]{4}" placeholder="SUSH">
@@ -558,12 +582,12 @@
                 <label for="task-title">Title</label>
                 <input id="task-title" required placeholder="Add a health endpoint">
               </div>
+              <div class="full-row">
+                <label for="task-desc">Acceptance Criteria</label>
+                <textarea id="task-desc" rows="2" required></textarea>
+              </div>
+              <button class="primary" type="submit">Create Task</button>
             </div>
-            <div>
-              <label for="task-desc">Acceptance Criteria</label>
-              <textarea id="task-desc" rows="5" required></textarea>
-            </div>
-            <button class="primary" type="submit">Create Task</button>
           </form>
           <div class="panel">
             <div class="panel-head">

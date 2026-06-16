@@ -493,9 +493,9 @@ if __name__ == "__main__":
     os.makedirs(dirs["work"], exist_ok=True)
     os.makedirs(dirs["logs"], exist_ok=True)
     
-    # zero-dependency TCPServer
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), SushiAPIHandler) as httpd:
+    # zero-dependency local server; threaded so parallel browser API requests do not block each other.
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    with socketserver.ThreadingTCPServer(("", PORT), SushiAPIHandler) as httpd:
         print(f"🍣 Sushi Company GUI API Server started at http://localhost:{PORT}")
         try:
             httpd.serve_forever()
