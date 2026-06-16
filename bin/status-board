@@ -51,7 +51,10 @@ case "$cmd" in
     fi
     # Look for any live `ship <ticket>` or `sushi <ticket>` process
     # (also catches their copilot --agent=ceo child referencing the ticket path)
+    self="$$"
+    parent="$PPID"
     matches=$(pgrep -af "sushi-(copilot-)?company/bin/(ship|sushi) $ticket( |$)|tickets/$ticket\.md|$SUSHI_STATE_DIR/.*/$ticket(\\.md|/)" \
+              | awk -v self="$self" -v parent="$parent" '$1 != self && $1 != parent' \
               | grep -v status-board || true)
     if [[ -z "$matches" ]]; then
       exit 1

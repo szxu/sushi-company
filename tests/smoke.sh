@@ -68,6 +68,11 @@ grep -q "active engine: opencode" /tmp/sushi-engine.out
 
 "$ROOT/bin/status-board" append START SUSH-0001 $$ smoke
 "$ROOT/bin/status-board" show 2 | grep -q SUSH-0001
+set +e
+bash -c "exec -a '/tmp/sushi-company/bin/ship SUSH-9999' bash -c '\"$ROOT/bin/status-board\" running SUSH-9999 >/tmp/sushi-self-running.out 2>&1'"
+self_running_rc=$?
+set -e
+[[ "$self_running_rc" -eq 1 ]]
 mkdir -p "$TMP_STATE/projects/SUSH/logs"
 printf 'smoke log\n' > "$TMP_STATE/projects/SUSH/logs/SUSH-0001.run.log"
 
