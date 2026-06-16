@@ -21,6 +21,27 @@ function runBin(name, args = []) {
   });
 }
 
+function createIssueTask(title, detail) {
+  try {
+    runBin("ticket", ["--project", "SUSH", title, detail]);
+  } catch {
+    try {
+      runBin("ticket", ["--project", "DEMO", title, detail]);
+    } catch {
+      // Preserve the original test failure if ticket creation also fails.
+    }
+  }
+}
+
+async function withIssueTaskOnFailure(title, detail, fn) {
+  try {
+    await fn();
+  } catch (error) {
+    createIssueTask(title, `${detail}\n\nDetected failure:\n${error.message}`);
+    throw error;
+  }
+}
+
 async function waitForServer(request) {
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
@@ -58,6 +79,7 @@ test.beforeAll(async ({ request }) => {
     SUSHI_HOME: path.join(tmpRoot, "sushi-home"),
     SUSHI_STATE_DIR: path.join(tmpRoot, "state"),
     SUSHI_GUI_PORT: String(port),
+    SUSHI_CLI: path.join(root, "tests", "fixtures", "fake-sushi-cli.sh"),
     COMPANY_DIR: root
   };
   fs.mkdirSync(env.HOME, { recursive: true });
@@ -111,4 +133,23 @@ test("doctor panel runs from the browser UI", async ({ page }) => {
   await page.goto(baseURL);
   await page.getByRole("button", { name: "Run Doctor" }).click();
   await expect(page.locator("#doctor-status")).toContainText(/PASS|FAIL/);
+});
+
+test("shipping from the Web UI starts a run without a duplicate-run abort", async ({ page }) => {
+  await withIssueTaskOnFailure(
+    "Fix Web UI ship launch automation",
+    "The BDD Ship button scenario detected that a GUI-triggered ship did not start cleanly.",
+    async () => {
+      const ticketId = mode === "vanilla" ? "DEMO-0001" : "SUSH-0001";
+      await page.goto(baseURL);
+      await page.getByRole("button", { name: "Tasks" }).first().click();
+      const taskCard = page.locator(".task-card").filter({ hasText: ticketId }).first();
+      await expect(taskCard).toBeVisible();
+      await taskCard.getByRole("button", { name: "Ship" }).click();
+      await expect(page.locator("#terminal-title")).toContainText(`${ticketId} output`);
+      await expect(page.locator("#terminal-output")).toContainText(/GUI Triggered Ship|Shipping|SHIP START|fake-sushi-cli/, { timeout: 10000 });
+      await expect(page.locator("#terminal-output")).not.toContainText("ABORT: another ship/sushi is already running");
+      await expect(page.locator("#terminal-output")).toContainText("fake-sushi-cli: APPROVED", { timeout: 10000 });
+    }
+  );
 });
